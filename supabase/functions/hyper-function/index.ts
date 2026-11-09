@@ -10,7 +10,7 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const versaoAtualSistema = "1.0.3;
+  const versaoAtualSistema = "1.0.4";
   const urlAtualizacao = "https://github.com/samufelassis-bit/PokeIdleManager/releases"; 
   const aviso = "Ha uma nova versao disponivel com melhorias e correcoes.";
 

@@ -1,3 +1,4 @@
 *.zip
 deploy.ps1
 *.png
+*supabase
