@@ -1,0 +1,5 @@
+<?xml xmlns="http://www.google.com/extensions/2006/update/sw">
+  <updateapp appid="SEU_EXTENSION_ID_AQUI">
+    <updateversion version="1.0.8" codebase="https://github.com/samufelassis-bit/PokeIdleManager/releases/latest/download/PokeIdleManager.zip" />
+  </updateapp>
+</updateapp>

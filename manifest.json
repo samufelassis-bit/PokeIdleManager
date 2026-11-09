@@ -1,7 +1,7 @@
 ﻿{
     "manifest_version":  3,
     "name":  "Pokeidle Bot Manager",
-    "version":  "1.0.8",
+    "version":  "1.0.9",
     "description":  "Gerenciador de licenÃ§a e automaÃ§Ã£o para Pokeidle",
     "permissions":  [
                         "storage"
