@@ -1,39 +1,43 @@
-{
-  "manifest_version": 3,
-  "name": "Pokeidle Bot Manager",
-  "version": "1.0.0",
-  "description": "Gerenciador de licença e automação para Pokeidle",
-  "permissions": [
-    "storage"
-  ],
-  "host_permissions": [
-    "https://fcigdnmvbaxwyjmyobvn.supabase.co/*",
-    "https://pokeidle.io/*",
-    "https://*.pokeidle.io/*"
-  ],
-  "background": {
-    "service_worker": "background.js"
-  },
-  "action": {
-    "default_popup": "popup.html"
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://pokeidle.io/*",
-        "https://*.pokeidle.io/*"
-      ],
-      "js": ["content.js"],
-      "run_at": "document_idle"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["bot.js"],
-      "matches": [
-        "https://pokeidle.io/*",
-        "https://*.pokeidle.io/*"
-      ]
-    }
-  ]
+﻿{
+    "manifest_version":  3,
+    "name":  "Pokeidle Bot Manager",
+    "version":  "1.0.1",
+    "description":  "Gerenciador de licenÃ§a e automaÃ§Ã£o para Pokeidle",
+    "permissions":  [
+                        "storage"
+                    ],
+    "host_permissions":  [
+                             "https://fcigdnmvbaxwyjmyobvn.supabase.co/*",
+                             "https://pokeidle.io/*",
+                             "https://*.pokeidle.io/*"
+                         ],
+    "background":  {
+                       "service_worker":  "background.js"
+                   },
+    "action":  {
+                   "default_popup":  "popup.html"
+               },
+    "content_scripts":  [
+                            {
+                                "matches":  [
+                                                "https://pokeidle.io/*",
+                                                "https://*.pokeidle.io/*"
+                                            ],
+                                "js":  [
+                                           "content.js"
+                                       ],
+                                "run_at":  "document_idle"
+                            }
+                        ],
+    "web_accessible_resources":  [
+                                     {
+                                         "resources":  [
+                                                           "bot.js"
+                                                       ],
+                                         "matches":  [
+                                                         "https://pokeidle.io/*",
+                                                         "https://*.pokeidle.io/*"
+                                                     ]
+                                     }
+                                 ]
 }

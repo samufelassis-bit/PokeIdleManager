@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function verificarVersao() {
         try {
-            const res = await fetch('https://fcigdnmvbaxwyjmyobvn.supabase.co/functions/v1/checar-versao');
+            const res = await fetch('https://fcigdnmvbaxwyjmyobvn.supabase.co/functions/v1/hyper-function');
             const data = await res.json();
 
             if (data.versao_recente && data.versao_recente !== VERSAO_ATUAL) {
