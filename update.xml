@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <gupdate xmlns="http://www.google.com/extensions/2006/update/sw">
   <updateapp appid="ocjboomfompjglgbbcpehmnghpcedpgd">
-    <updateversion version="1.0.13" codebase="https://github.com/samufelassis-bit/PokeIdleManager/releases/latest/download/PokeIdleManager.zip" />
+    <updateversion version="1.0.14" codebase="https://github.com/samufelassis-bit/PokeIdleManager/releases/latest/download/PokeIdleManager.zip" />
   </updateapp>
 </gupdate>
