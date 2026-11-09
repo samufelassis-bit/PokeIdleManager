@@ -1,43 +1,45 @@
 ﻿{
-    "manifest_version":  3,
-    "name":  "PokeIdleManager",
-    "version":  "1.0.12",
-    "key":  "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDQ7/SDKSWa5FyB/I5aWybc97zOOPlQr0KagD/wFQ9E1UOJVLt6qVEO7/3gClx1ENUA8JNMAe6BIVf32p9qGI20ygqY5PUHhcKeIEIS/EYhNuuYFfWKGIQSS2QCQiK1baMQV98+Zj9eA/IpL6kwtMAzwk8sGs+7uB+APETFiZIWTvTC63wiQMI+wGoRXg3SZOzauSfmEcD9Q71et5qgToKpOe0xPLla/Dj1rQ2efXSmSYknQ+nlyVTRFTmk4L9ad5wj1fpvST6/xa7VyitTOY8aYWs+n/nHRZRktFleBuGp0rtn8rB2TuvnV1k4PZIimq7Ps0n2fe9zvTifY2aO9KE7AgMBAAECggEAEMVaBpcsbhDrfgGUOZt8dJssHA+Fr5zJx1YJC8/c8GT/7UuQWumxWHYaFjwurLTjrBYjdKPpDZNsGLiDOERtR3g6PoiORILPmtqzAwwd4veiFIyar3GFVGSZy/acC50XzC2JfVw+tOCzNOwe9ApmLSFpMnyadRJz8NqlmIeQ4tpheB8MHH2dqnjQmhbmjXGnVWP87UB4YLHbGIMO2ZlqTtJVY2ivmO7xH/51hVHEjTf8JjoaJ+YLPOH4qHtlF6kQcLDPspLF7DVIEnRo2DQcyFEfKhvhgdjJTLnd8P40dP5z0uV7EFujArgCa2lATlC1jWKk3bYDXJikD61crbt0GQKBgQDq/63OnKKil7vDhlEGQDW66VPTc0VDBqTbu1tNQQDVfb7tjJyQ1Uf74MoOdgWr1qvzkzKMPS+mZszpZYEoFwj1doJ6Qjw1N7ucz4ninYYE0TCDsU17eJcDveOrHk8jNuiZ6xllF3Qy3mwx2fxQxi1To48K07WulA/cR52cy6po8wKBgQDjnApycPkLuFHBiEbihUD+KWSiFMJvvsp+u9sOS5sOwU/SqkqbDG4V9VkUoUOJ8tDLc+y3sdScVQjEJRv3eLO+7ZquHO4PPbbzPMQJ/GKHnfbvVoajuekNtRxqxbJzWknexUB/gCKo+PSshh8+M9ff7ze7tzurIfVKVmv0e54mQKBgAg1L+vkeqW1KQC2Q0Q1n+rMVXowL34c0EtAavryx0Wto6qGW72PRXldq5D/vEj5MX5LaNuPE4f7VTLdsbolu9Fe90Wv5IxzSuE6OnWozNKEP+6Jlcw3NQcTbc0/PMJdG5ispnFqdUuFiz/efjqQAWtHbiqRpGnZkAhAlBey4VvTAoGBAIBpp9h7xDCGHoWCuMUf15GBBHEyxp62CGB7+f62GDHp7qDxz5Vmq3qU24kZYYYv5Z52ESC1jsVMbK1wJK6YdqqwaqaV2YZttkd0auXvA/W5umDL6ls5rF9e3M47Z9yZt5MjokUapdsbBhnTGFDjV67G2kOm6HB3wa0ZhaP9gUsnpAoGAYmigPB3s2cENVGeRKTFlNv8ZqJDaGv48ixeXouC3OGbZOotwkEV6+5wVBwkQVayQbb5J/s0g9NIQlvMkauh0968qw4v0TagkDDahGDU+R6oACvMhUkP+19UnAP+XOrU5aZ1nNZGWDjf9aBflLKcmJTCdvR362T7VdKuYvrnkbnw=",
-    "permissions":  [
-                        "storage"
-                    ],
+    "action":  {
+                   "default_popup":  "popup.html"
+               },
+    "background":  {
+                       "service_worker":  "background.js"
+                   },
+    "content_scripts":  [
+                            {
+                                "js":  [
+                                           "content.js"
+                                       ],
+                                "matches":  [
+                                                "https://pokeidle.io/*",
+                                                "https://*.pokeidle.io/*"
+                                            ],
+                                "run_at":  "document_idle"
+                            }
+                        ],
+    "description":  "Gerenciador de licença e automação para Pokeidle",
     "host_permissions":  [
                              "https://fcigdnmvbaxwyjmyobvn.supabase.co/*",
                              "https://pokeidle.io/*",
                              "https://*.pokeidle.io/*"
                          ],
-    "background":  {
-                       "service_worker":  "background.js"
-                   },
-    "action":  {
-                   "default_popup":  "popup.html"
-               },
-    "content_scripts":  [
-                            {
-                                "matches":  [
-                                                "https://pokeidle.io/*",
-                                                "https://*.pokeidle.io/*"
-                                            ],
-                                "js":  [
-                                           "content.js"
-                                       ],
-                                "run_at":  "document_idle"
-                            }
-                        ],
+    "key":  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkWc+/B5j4yX/GECoQps2GJ27SZNZl+ruj3YV7z4bM/en8CuiJH3KIy1B7nE5t1pw1l4ZG4y5nR4Gp2mvWBtYcdJ+B+aDvAOq3oPQUDZH7m3gxAQP2g0fSTJg+IjtPunCuN+pXFqwfY5WwptGndn8bntKQWuiCj00vUMU4bqNkkjm0X8k3+uV2sY0joVSb6YJD9jz4EQlxVUScW6C1r5g8hgH9Xc3AExzmzOdjjhIm9EFe21KwNt6mOKqnrtLR4b/rAAqIuErTD3kllmAFVCKvqT0EWBTysPxDxZhx8BdVkLHmjO1PBsGMQRou/kiuSb7vBJkdvvxjfRzeWoprPZu/wIDAQAB",
+    "manifest_version":  3,
+    "name":  "Pokeidle Bot Manager",
+    "permissions":  [
+                        "storage"
+                    ],
+    "update_url":  "https://clients2.google.com/service/update2/crx",
+    "version":  "1.0.13",
     "web_accessible_resources":  [
                                      {
-                                         "resources":  [
-                                                           "bot.js"
-                                                       ],
                                          "matches":  [
                                                          "https://pokeidle.io/*",
                                                          "https://*.pokeidle.io/*"
-                                                     ]
+                                                     ],
+                                         "resources":  [
+                                                           "bot.js"
+                                                       ]
                                      }
                                  ]
 }
