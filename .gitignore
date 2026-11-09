@@ -2,3 +2,5 @@
 deploy.ps1
 *.png
 supabase/
+Zips\
+client_secret.json
