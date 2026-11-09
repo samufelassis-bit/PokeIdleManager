@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const lblVersao = document.getElementById('lbl-versao');
     const divVencimento = document.getElementById('vencimento');
 
-    const VERSAO_ATUAL = "1.0.0";
+    const VERSAO_ATUAL = chrome.runtime.getManifest().version;
     
     if (lblVersao) {
         lblVersao.textContent = `v${VERSAO_ATUAL}`;
