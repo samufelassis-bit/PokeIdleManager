@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Histórico de Compras - Pokeidle Bot</title>
+    <style>
+        body { background: #121212; color: #fff; font-family: sans-serif; padding: 20px; }
+        h2 { color: #4ade80; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #333; padding: 10px; text-align: left; font-size: 13px; }
+        th { background: #1f1f1f; color: #aaa; }
+        .approved { color: #22c55e; font-weight: bold; }
+        .pending { color: #eab308; font-weight: bold; }
+        .cancelled { color: #ef4444; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h2>Histórico de Assinaturas e Compras</h2>
+    <p id="info-email" style="color: #888; font-size: 13px;"></p>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>ID Transação</th>
+                <th>Valor</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="tabela-historico">
+            <tr><td colspan="4">Carregando histórico...</td></tr>
+        </tbody>
+    </table>
+
+    <script src="historico.js"></script>
+</body>
+</html>

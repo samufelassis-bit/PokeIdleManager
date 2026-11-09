@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { 
+            width: 240px; 
+            background: #1a1a1a; 
+            color: #fff; 
+            font-family: sans-serif; 
+            padding: 12px; 
+            margin: 0; 
+        }
+        h3 { 
+            color: #4ade80; 
+            margin-top: 0; 
+            font-size: 15px; 
+            margin-bottom: 10px; 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .versao {
+            font-size: 10px;
+            color: #777;
+            font-weight: normal;
+        }
+        label { 
+            font-size: 11px; 
+            color: #aaa; 
+            display: block; 
+            margin-bottom: 4px; 
+        }
+        input { 
+            width: 100%; 
+            background: #111; 
+            color: #fff; 
+            border: 1px solid #444; 
+            border-radius: 4px; 
+            padding: 6px; 
+            box-sizing: border-box; 
+            margin-bottom: 8px; 
+            font-size: 12px; 
+        }
+        button { 
+            width: 100%; 
+            background: #3b82f6; 
+            color: #fff; 
+            border: none; 
+            padding: 7px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            font-size: 12px; 
+            margin-bottom: 6px; 
+        }
+        button:hover { background: #2563eb; }
+        #btn-comprar { background: #10b981; }
+        #btn-comprar:hover { background: #059669; }
+        .status { 
+            font-size: 11px; 
+            margin-top: 6px; 
+            text-align: center; 
+            color: #888; 
+        }
+        .vencimento-info {
+            font-size: 11px;
+            margin-top: 4px;
+            text-align: center;
+            color: #bbb;
+        }
+    </style>
+</head>
+<body>
+    <h3>Pokeidle Bot <span id="lbl-versao" class="versao">v1.0.0</span></h3>
+    <label>E-mail da Assinatura:</label>
+    <input type="email" id="input-email" placeholder="seu@email.com">
+    <button id="btn-ativar">Salvar e Ativar</button>
+    <button id="btn-comprar">Comprar / Renovar Licença</button>
+	<button id="btn-historico" style="background: #4b5563;">Ver Histórico de Compras</button>
+    <div id="status" class="status">Status: Desconectado</div>
+    <div id="vencimento" class="vencimento-info">Validade: --/--/----</div>
+    <script src="popup.js"></script>
+</body>
+</html>
