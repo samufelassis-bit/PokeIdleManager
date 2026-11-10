@@ -1,195 +1,161 @@
+// popup.js
 document.addEventListener('DOMContentLoaded', () => {
-    const inputEmail = document.getElementById('input-email');
-    const btnAtivar = document.getElementById('btn-ativar');
-    const btnComprar = document.getElementById('btn-comprar');
-    const btnHistorico = document.getElementById('btn-historico');
-    const divStatus = document.getElementById('status');
-    const lblVersao = document.getElementById('lbl-versao');
-    const divVencimento = document.getElementById('vencimento');
+    const $ = (id) => document.getElementById(id);
+    const inputEmail = $('input-email');
+    const btnAtivar = $('btn-ativar');
+    const btnComprar = $('btn-comprar');
+    const btnHistorico = $('btn-historico');
+    const divStatus = $('status');
+    const divVencimento = $('vencimento');
+    const divAviso = $('aviso-versao');
 
     const VERSAO_ATUAL = chrome.runtime.getManifest().version;
-    
-    if (lblVersao) {
-        lblVersao.textContent = `v${VERSAO_ATUAL}`;
+    $('lbl-versao').textContent = `v${VERSAO_ATUAL}`;
+
+    // ---------- Utilidades ----------
+
+    /** Retorna a URL se for https válida; caso contrário null (evita javascript: e afins). */
+    function urlHttpsSegura(valor) {
+        try {
+            const url = new URL(valor);
+            return url.protocol === 'https:' ? url.href : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** true se a versão `a` for maior que `b` (comparação numérica, ex.: 1.10.0 > 1.9.0). */
+    function versaoMaior(a, b) {
+        const pa = String(a).split('.').map(Number);
+        const pb = String(b).split('.').map(Number);
+        for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+            const x = pa[i] || 0;
+            const y = pb[i] || 0;
+            if (x !== y) return x > y;
+        }
+        return false;
+    }
+
+    function mostrarStatus(texto, tipo) {
+        divStatus.textContent = texto;
+        divStatus.className = `status ${tipo}`;
+    }
+
+    function renderizarLicenca({ ativo, vencimento }) {
+        if (ativo) {
+            mostrarStatus('Status: Ativo', 'ok');
+        } else {
+            mostrarStatus('Status: Vencido / Inativo', 'erro');
+        }
+        const data = vencimento ? new Date(vencimento) : null;
+        divVencimento.textContent = data && !Number.isNaN(data.getTime())
+            ? `Validade: ${data.toLocaleDateString('pt-BR')}`
+            : 'Validade: --/--/----';
+    }
+
+    function definirControlesBloqueados(bloqueado) {
+        [inputEmail, btnAtivar, btnComprar, btnHistorico].forEach((el) => { el.disabled = bloqueado; });
+    }
+
+    async function validarLicenca(email) {
+        mostrarStatus('Status: Verificando...', 'aviso');
+        try {
+            renderizarLicenca(await verificarLicenca(email));
+        } catch (err) {
+            console.error('Erro ao verificar licença:', err);
+            mostrarStatus('Status: Erro de conexão', 'aviso');
+        }
+    }
+
+    // ---------- Aviso de atualização ----------
+
+    function mostrarAvisoAtualizacao({ mensagem, url, obrigatorio }) {
+        divAviso.className = `aviso-versao${obrigatorio ? ' obrigatorio' : ''}`;
+        divAviso.replaceChildren();
+
+        const titulo = document.createElement('strong');
+        titulo.textContent = obrigatorio ? 'Atualização Obrigatória!' : 'Nova Versão Disponível!';
+        divAviso.append(titulo, document.createElement('br'));
+        divAviso.append(mensagem || 'Baixe a versão mais recente para continuar.', document.createElement('br'));
+
+        const href = urlHttpsSegura(url);
+        if (href) {
+            const link = document.createElement('a');
+            link.href = href;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = 'Atualizar Agora';
+            divAviso.append(link);
+        }
+
+        if (obrigatorio) definirControlesBloqueados(true);
     }
 
     async function verificarVersao() {
         try {
-            const res = await fetch('https://fcigdnmvbaxwyjmyobvn.supabase.co/functions/v1/hyper-function');
-            const data = await res.json();
-
-            if (data.versao_recente && data.versao_recente !== VERSAO_ATUAL) {
-                mostrarAvisoAtualizacao(data.mensagem, data.url, data.atualizacao_obrigatoria);
-            }
-        } catch (err) {
-            console.error("Erro ao verificar versão:", err);
-        }
-    }
-
-    function mostrarAvisoAtualizacao(mensagem, url, obrigatorio) {
-        const container = document.body;
-        
-        const avisoDiv = document.createElement('div');
-        avisoDiv.style.background = obrigatorio ? '#f8d7da' : '#fff3cd';
-        avisoDiv.style.border = `1px solid ${obrigatorio ? '#f5c6cb' : '#ffeeba'}`;
-        avisoDiv.style.color = obrigatorio ? '#721c24' : '#856404';
-        avisoDiv.style.padding = '10px';
-        avisoDiv.style.marginBottom = '12px';
-        avisoDiv.style.borderRadius = '6px';
-        avisoDiv.style.fontSize = '12px';
-        avisoDiv.style.textAlign = 'center';
-        
-        avisoDiv.innerHTML = `
-            <strong>${obrigatorio ? 'Atualização Obrigatória!' : 'Nova Versão Disponível!'}</strong><br>
-            ${mensagem || 'Baixe a versão mais recente para continuar.'}<br>
-            <a href="${url || '#'}" target="_blank" style="color: #0056b3; font-weight: bold; text-decoration: underline; display: inline-block; margin-top: 4px;">Atualizar Agora</a>
-        `;
-        
-        container.prepend(avisoDiv);
-
-        if (obrigatorio) {
-            inputEmail.disabled = true;
-            btnAtivar.disabled = true;
-            btnComprar.disabled = true;
-            if (btnHistorico) btnHistorico.disabled = true;
-            btnAtivar.style.opacity = '0.5';
-            btnComprar.style.opacity = '0.5';
-            if (btnHistorico) btnHistorico.style.opacity = '0.5';
-        }
-    }
-
-    // Executa a checagem de versão
-    verificarVersao();
-
-    // Função auxiliar para notificar a aba do jogo (content.js) em tempo real
-    function notificarAbaAtiva(ativo) {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0] && tabs[0].id) {
-                chrome.tabs.sendMessage(tabs[0].id, { acao: "atualizarLicenca", ativo: ativo }).catch(() => {
-                    // Ignora se a aba ativa não for a página do jogo
+            const data = await Api.versaoRecente();
+            if (data.versao_recente && versaoMaior(data.versao_recente, VERSAO_ATUAL)) {
+                mostrarAvisoAtualizacao({
+                    mensagem: data.mensagem,
+                    url: data.url,
+                    obrigatorio: Boolean(data.atualizacao_obrigatoria),
                 });
             }
-        });
-    }
-
-    // Função auxiliar para atualizar a interface com os dados da licença
-    function atualizarInterfaceLicenca(ativo, vencimento) {
-        if (ativo) {
-            divStatus.textContent = 'Status: Ativo';
-            divStatus.style.color = '#22c55e';
-        } else {
-            divStatus.textContent = 'Status: Vencido / Inativo';
-            divStatus.style.color = '#ef4444';
-        }
-
-        if (vencimento && divVencimento) {
-            const dataFormatada = new Date(vencimento).toLocaleDateString('pt-BR');
-            divVencimento.textContent = `Validade: ${dataFormatada}`;
-        } else if (divVencimento) {
-            divVencimento.textContent = `Validade: --/--/----`;
+        } catch (err) {
+            console.error('Erro ao verificar versão:', err);
         }
     }
 
-    // Carrega e-mail salvo e faz a validação automática em segundo plano
-    chrome.storage.local.get(['emailUsuario', 'ativo', 'vencimento'], (data) => {
-        if (data.emailUsuario) {
-            inputEmail.value = data.emailUsuario;
-            
-            // Validação automática ao abrir o popup usando o e-mail salvo
-            divStatus.textContent = 'Status: Verificando...';
-            divStatus.style.color = '#eab308';
+    // ---------- Ações ----------
 
-            chrome.runtime.sendMessage({ acao: "obterBot", email: data.emailUsuario }, (resposta) => {
-                if (resposta && resposta.sucesso) {
-                    const dataVencimento = resposta.vencimento || resposta.data_expiracao;
-                    chrome.storage.local.set({ ativo: true, vencimento: dataVencimento });
-                    atualizarInterfaceLicenca(true, dataVencimento);
-                    notificarAbaAtiva(true);
-                } else {
-                    chrome.storage.local.set({ ativo: false });
-                    atualizarInterfaceLicenca(false, null);
-                    notificarAbaAtiva(false);
-                }
-            });
-        } else {
-            atualizarInterfaceLicenca(false, null);
-            divStatus.textContent = 'Status: Desconectado';
-            divStatus.style.color = '#ef4444';
-            notificarAbaAtiva(false);
-        }
-    });
-
-    // Salva o e-mail e valida a licença manualmente ao clicar no botão
-    btnAtivar.addEventListener('click', () => {
+    btnAtivar.addEventListener('click', async () => {
         const email = inputEmail.value.trim();
-        if (!email) {
+        if (!email || !inputEmail.checkValidity()) {
             alert('Insira um e-mail válido!');
             return;
         }
-
-        divStatus.textContent = 'Status: Verificando...';
-        divStatus.style.color = '#eab308';
-
-        chrome.storage.local.set({ emailUsuario: email }, () => {
-            chrome.runtime.sendMessage({ acao: "obterBot", email: email }, (resposta) => {
-                if (resposta && resposta.sucesso) {
-                    const dataVencimento = resposta.vencimento || resposta.data_expiracao;
-                    chrome.storage.local.set({ ativo: true, vencimento: dataVencimento });
-                    atualizarInterfaceLicenca(true, dataVencimento);
-                    notificarAbaAtiva(true);
-                } else {
-                    chrome.storage.local.set({ ativo: false });
-                    atualizarInterfaceLicenca(false, null);
-                    notificarAbaAtiva(false);
-                }
-            });
-        });
+        await chrome.storage.local.set({ emailUsuario: email });
+        await validarLicenca(email);
     });
 
-    // Gera o link de pagamento/renovação do Mercado Pago
-    btnComprar.addEventListener('click', () => {
+    btnComprar.addEventListener('click', async () => {
         const email = inputEmail.value.trim();
-        if (!email) {
-            alert('Digite seu e-mail antes de prosseguir!');
+        if (!email || !inputEmail.checkValidity()) {
+            alert('Digite um e-mail válido antes de prosseguir!');
             return;
         }
 
-        const SUPABASE_ANON_KEY = "sb_publishable_WuCewm2dUr_ZuzZ05T6pKw_bdPuEd9v";
-
-        fetch('https://fcigdnmvbaxwyjmyobvn.supabase.co/functions/v1/criar-pagamento', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-            },
-            body: JSON.stringify({ email: email })
-        })
-        .then(async res => {
-            const texto = await res.text();
-            try {
-                return JSON.parse(texto);
-            } catch (e) {
-                throw new Error("Erro no servidor: " + texto);
-            }
-        })
-        .then(data => {
-            if (data.sucesso && data.checkout_url) {
-                chrome.storage.local.set({ emailUsuario: email });
-                chrome.tabs.create({ url: data.checkout_url });
+        btnComprar.disabled = true;
+        try {
+            const data = await Api.criarPagamento(email);
+            const checkout = urlHttpsSegura(data.checkout_url);
+            if (data.sucesso && checkout) {
+                await chrome.storage.local.set({ emailUsuario: email });
+                chrome.tabs.create({ url: checkout });
             } else {
                 alert('Erro ao gerar pagamento: ' + (data.mensagem || data.erro || 'Tente novamente.'));
             }
-        })
-        .catch(err => {
+        } catch (err) {
             alert('Erro de conexão: ' + err.message);
-        });
+        } finally {
+            btnComprar.disabled = false;
+        }
     });
 
-    // Abre a aba com o histórico de compras do usuário
-    if (btnHistorico) {
-        btnHistorico.addEventListener('click', () => {
-            chrome.tabs.create({ url: chrome.runtime.getURL('historico.html') });
-        });
-    }
+    btnHistorico.addEventListener('click', () => {
+        chrome.tabs.create({ url: chrome.runtime.getURL('historico.html') });
+    });
+
+    // ---------- Inicialização ----------
+
+    verificarVersao();
+
+    chrome.storage.local.get(['emailUsuario'], ({ emailUsuario }) => {
+        if (emailUsuario) {
+            inputEmail.value = emailUsuario;
+            validarLicenca(emailUsuario);
+        } else {
+            mostrarStatus('Status: Desconectado', 'erro');
+        }
+    });
 });

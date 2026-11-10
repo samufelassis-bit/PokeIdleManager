@@ -1,44 +1,76 @@
-document.addEventListener('DOMContentLoaded', () => {
+// historico.js
+document.addEventListener('DOMContentLoaded', async () => {
     const infoEmail = document.getElementById('info-email');
     const tabela = document.getElementById('tabela-historico');
-    const SUPABASE_ANON_KEY = "sb_publishable_WuCewm2dUr_ZuzZ05T6pKw_bdPuEd9v";
 
-    chrome.storage.local.get(['emailUsuario'], (data) => {
-        if (!data.emailUsuario) {
-            tabela.innerHTML = '<tr><td colspan="4">Nenhum e-mail encontrado na sessão.</td></tr>';
+    const STATUS = {
+        approved: { texto: 'Aprovado', classe: 'approved' },
+        pending: { texto: 'Pendente', classe: 'pending' },
+        in_process: { texto: 'Pendente', classe: 'pending' },
+        cancelled: { texto: 'Cancelado', classe: 'cancelled' },
+        rejected: { texto: 'Recusado', classe: 'cancelled' },
+        refunded: { texto: 'Reembolsado', classe: 'cancelled' },
+    };
+
+    function mensagem(texto) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 4;
+        td.textContent = texto;
+        tr.appendChild(td);
+        tabela.replaceChildren(tr);
+    }
+
+    function celula(texto, classe) {
+        const td = document.createElement('td');
+        td.textContent = texto;
+        if (classe) td.className = classe;
+        return td;
+    }
+
+    function formatarData(valor) {
+        const data = new Date(valor);
+        return Number.isNaN(data.getTime())
+            ? '—'
+            : `${data.toLocaleDateString('pt-BR')} ${data.toLocaleTimeString('pt-BR')}`;
+    }
+
+    function formatarValor(valor) {
+        const numero = Number.parseFloat(valor);
+        return Number.isFinite(numero) ? `R$ ${numero.toFixed(2)}` : '—';
+    }
+
+    const { emailUsuario } = await chrome.storage.local.get('emailUsuario');
+    if (!emailUsuario) {
+        mensagem('Nenhum e-mail encontrado na sessão.');
+        return;
+    }
+
+    infoEmail.textContent = `Sincronizando e exibindo compras para: ${emailUsuario}`;
+
+    try {
+        // A Edge Function busca no Mercado Pago e sincroniza o retroativo
+        const res = await Api.sincronizarCompras(emailUsuario);
+
+        if (!res.sucesso || !Array.isArray(res.compras) || res.compras.length === 0) {
+            mensagem('Nenhuma compra encontrada para este e-mail.');
             return;
         }
 
-        infoEmail.textContent = `Sincronizando e exibindo compras para: ${data.emailUsuario}`;
-
-        // Chama a Edge Function que busca do Mercado Pago e sincroniza o retroativo
-        fetch('https://fcigdnmvbaxwyjmyobvn.supabase.co/functions/v1/sincronizar-compras', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-            },
-            body: JSON.stringify({ email: data.emailUsuario })
-        })
-        .then(res => res.json())
-        .then(res => {
-            if (!res.sucesso || !res.compras || res.compras.length === 0) {
-                tabela.innerHTML = '<tr><td colspan="4">Nenhuma compra encontrada para este e-mail.</td></tr>';
-                return;
-            }
-
-            tabela.innerHTML = res.compras.map(c => `
-                <tr>
-                    <td>${new Date(c.created_at).toLocaleDateString('pt-BR')} ${new Date(c.created_at).toLocaleTimeString('pt-BR')}</td>
-                    <td>${c.id_transacao_mp || 'N/A'}</td>
-                    <td>R$ ${parseFloat(c.valor).toFixed(2)}</td>
-                    <td class="approved">Aprovado</td>
-                </tr>
-            `).join('');
-        })
-        .catch(err => {
-            tabela.innerHTML = `<tr><td colspan="4">Erro ao sincronizar histórico: ${err.message}</td></tr>`;
+        const linhas = res.compras.map((c) => {
+            // Se o servidor não enviar status, assume aprovado (comportamento anterior)
+            const status = STATUS[c.status] || STATUS.approved;
+            const tr = document.createElement('tr');
+            tr.append(
+                celula(formatarData(c.created_at)),
+                celula(c.id_transacao_mp || 'N/A'),
+                celula(formatarValor(c.valor)),
+                celula(status.texto, status.classe),
+            );
+            return tr;
         });
-    });
+        tabela.replaceChildren(...linhas);
+    } catch (err) {
+        mensagem(`Erro ao sincronizar histórico: ${err.message}`);
+    }
 });

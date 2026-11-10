@@ -1,85 +1,43 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
     <meta charset="utf-8">
     <style>
-        body { 
-            width: 240px; 
-            background: #1a1a1a; 
-            color: #fff; 
-            font-family: sans-serif; 
-            padding: 12px; 
-            margin: 0; 
-        }
-        h3 { 
-            color: #4ade80; 
-            margin-top: 0; 
-            font-size: 15px; 
-            margin-bottom: 10px; 
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .versao {
-            font-size: 10px;
-            color: #777;
-            font-weight: normal;
-        }
-        label { 
-            font-size: 11px; 
-            color: #aaa; 
-            display: block; 
-            margin-bottom: 4px; 
-        }
-        input { 
-            width: 100%; 
-            background: #111; 
-            color: #fff; 
-            border: 1px solid #444; 
-            border-radius: 4px; 
-            padding: 6px; 
-            box-sizing: border-box; 
-            margin-bottom: 8px; 
-            font-size: 12px; 
-        }
-        button { 
-            width: 100%; 
-            background: #3b82f6; 
-            color: #fff; 
-            border: none; 
-            padding: 7px; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            font-weight: bold; 
-            font-size: 12px; 
-            margin-bottom: 6px; 
-        }
-        button:hover { background: #2563eb; }
+        body { width: 240px; background: #1a1a1a; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; }
+        h3 { color: #4ade80; margin: 0 0 10px; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .versao { font-size: 10px; color: #777; font-weight: normal; }
+        label { font-size: 11px; color: #aaa; display: block; margin-bottom: 4px; }
+        input { width: 100%; background: #111; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 6px; box-sizing: border-box; margin-bottom: 8px; font-size: 12px; }
+        button { width: 100%; background: #3b82f6; color: #fff; border: none; padding: 7px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px; margin-bottom: 6px; }
+        button:hover:not(:disabled) { background: #2563eb; }
+        button:disabled, input:disabled { opacity: 0.5; cursor: not-allowed; }
         #btn-comprar { background: #10b981; }
-        #btn-comprar:hover { background: #059669; }
-        .status { 
-            font-size: 11px; 
-            margin-top: 6px; 
-            text-align: center; 
-            color: #888; 
-        }
-        .vencimento-info {
-            font-size: 11px;
-            margin-top: 4px;
-            text-align: center;
-            color: #bbb;
-        }
+        #btn-comprar:hover:not(:disabled) { background: #059669; }
+        #btn-historico { background: #4b5563; }
+        #btn-historico:hover:not(:disabled) { background: #374151; }
+        .status { font-size: 11px; margin-top: 6px; text-align: center; color: #888; }
+        .status.ok { color: #22c55e; }
+        .status.erro { color: #ef4444; }
+        .status.aviso { color: #eab308; }
+        .vencimento-info { font-size: 11px; margin-top: 4px; text-align: center; color: #bbb; }
+        .aviso-versao { padding: 10px; margin-bottom: 12px; border-radius: 6px; font-size: 12px; text-align: center; background: #fff3cd; border: 1px solid #ffeeba; color: #856404; }
+        .aviso-versao.obrigatorio { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .aviso-versao a { color: #0056b3; font-weight: bold; text-decoration: underline; display: inline-block; margin-top: 4px; }
     </style>
 </head>
 <body>
-    <h3>Pokeidle Bot <span id="lbl-versao" class="versao">v1.0.0</span></h3>
-    <label>E-mail da Assinatura:</label>
+    <div id="aviso-versao"></div>
+    <h3>Pokeidle Bot <span id="lbl-versao" class="versao"></span></h3>
+    <label for="input-email">E-mail da Assinatura:</label>
     <input type="email" id="input-email" placeholder="seu@email.com">
     <button id="btn-ativar">Salvar e Ativar</button>
     <button id="btn-comprar">Comprar / Renovar Licença</button>
-	<button id="btn-historico" style="background: #4b5563;">Ver Histórico de Compras</button>
+    <button id="btn-historico">Ver Histórico de Compras</button>
     <div id="status" class="status">Status: Desconectado</div>
     <div id="vencimento" class="vencimento-info">Validade: --/--/----</div>
+
+    <script src="config.js"></script>
+    <script src="api.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>
