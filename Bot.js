@@ -1,4 +1,4 @@
-// bot.js
+// bot.js completo, corrigido e otimizado
 (function() {
     const antigo = document.getElementById('bot-controle-triplo');
     if (antigo) antigo.remove();
@@ -11,7 +11,7 @@
 
     const painelControle = document.createElement('div');
     painelControle.innerHTML = `
-        <div id="bot-controle-triplo" style="position: fixed; top: 10px; right: 10px; z-index: 99999; background: #1a1a1a; color: #fff; padding: 12px; border-radius: 10px; font-family: sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-size: 12px; display: flex; flex-direction: column; gap: 10px; width: 220px; border: 1px solid #333;">
+        <div id="bot-controle-triplo" style="position: fixed; top: 10px; right: 10px; z-index: 99999; background: #1a1a1a; color: #fff; padding: 12px; border-radius: 10px; font-family: sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-size: 12px; display: flex; flex-direction: column; gap: 10px; width: 240px; border: 1px solid #333;">
             <div style="font-weight: bold; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 6px; color: #4ade80;">
                 <span>Auto Bot Manager</span>
                 <button id="btn-minimizar" style="background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; width: 20px; height: 20px; cursor: pointer; font-size: 10px; display: flex; align-items: center; justify-content: center; padding: 0;">−</button>
@@ -28,7 +28,19 @@
                         <span style="font-size: 10px; color: #888;">Tempo (s):</span>
                         <input type="number" id="input-tempo-hunt" value="600" style="width: 70px; background: #111; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 3px; text-align: center; font-size: 11px;">
                     </div>
+                    <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 2px;">
+                        <span style="font-size: 10px; color: #888;">Região Alvo:</span>
+                        <div style="display: flex; gap: 4px;">
+                            <select id="select-mapa-hunt" style="flex: 1; background: #111; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 3px; font-size: 10px;">
+                                <option value="">(Automático / Melhor)</option>
+                            </select>
+                            <button id="btn-carregar-mapas" style="background: #3b82f6; color: #fff; border: none; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 10px;" title="Carregar regiões abertas no jogo">🔍</button>
+                        </div>
+                    </div>
                     <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px;">
+                        <input type="checkbox" id="chk-so-liberadas" data-pref="soLiberadas" style="cursor: pointer;" checked> só hunts liberadas
+                    </label>
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 11px;">
                         <input type="checkbox" id="chk-sync-risco" style="cursor: pointer;" checked> Sincronizar Poção (100% - Risco)
                     </label>
                 </div>
@@ -90,7 +102,99 @@
         painelConteudo.style.display = minimizado ? 'none' : 'flex';
         btnMinimizar.textContent = minimizado ? '+' : '−';
     });
+	function aguardarElemento(seletor, timeout = 5000) {
+        return new Promise((resolve, reject) => {
+            const inicio = Date.now();
+            const timer = setInterval(() => {
+                const el = document.querySelector(seletor);
+                if (el) {
+                    clearInterval(timer);
+                    resolve(el);
+                } else if (Date.now() - inicio > timeout) {
+                    clearInterval(timer);
+                    reject(new Error(`Timeout aguardando elemento: ${seletor}`));
+                }
+            }, 100);
+        });
+    }
+	async function sincronizarCheckboxLiberadas() {
+        const chkBot = document.getElementById('chk-so-liberadas');
+        const chkJogo = document.querySelector('body > div.pih-painel > div.pih-ctrl > label > input[type=checkbox]');
+        
+        if (chkBot && chkJogo) {
+            if (chkJogo.checked !== chkBot.checked) {
+                chkJogo.checked = chkBot.checked;
+                chkJogo.dispatchEvent(new Event('change', { bubbles: true }));
+                chkJogo.dispatchEvent(new Event('input', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 350));
+            }
+        }
+    }
 
+    async function popularDropdownRegioes() {
+        const select = document.getElementById('select-mapa-hunt');
+        select.innerHTML = '<option value="">(Automático / Melhor)</option>';
+        
+        await sincronizarCheckboxLiberadas();
+
+        let painelHunt = document.querySelector('.pih-regioes');
+        if (!painelHunt) {
+            const botaoHunt = document.querySelector('button.pih-btn.pih-barra') || Array.from(document.querySelectorAll('button')).find(el => el.textContent.includes('/hunt'));
+            if (botaoHunt) {
+                botaoHunt.click();
+                try {
+                    painelHunt = await aguardarElemento('.pih-regioes', 3000);
+                } catch(e) {
+                    return 0;
+                }
+            }
+        }
+
+        const elementosRegioes = document.querySelectorAll('.pih-regioes [data-regiao]');
+        if (!elementosRegioes || elementosRegioes.length === 0) return 0;
+
+        const regioes = Array.from(elementosRegioes).map(el => el.getAttribute('data-regiao'));
+        
+        let adicionados = 0;
+        regioes.forEach(regiao => {
+            if (regiao !== null) {
+                let existe = Array.from(select.options).some(opt => opt.value.toLowerCase() === regiao.toLowerCase());
+                if (!existe) {
+                    const opt = document.createElement('option');
+                    opt.value = regiao;
+                    opt.textContent = regiao === "" ? "(Automático / Melhor)" : regiao.charAt(0).toUpperCase() + regiao.slice(1);
+                    select.appendChild(opt);
+                    adicionados++;
+                }
+            }
+        });
+        return adicionados;
+    }
+	document.getElementById('btn-carregar-mapas').addEventListener('click', async () => {
+        const painelHuntJaAberto = document.querySelector('.pih-tab');
+        const botaoHunt = document.querySelector('button.pih-btn.pih-barra') || Array.from(document.querySelectorAll('button')).find(el => el.textContent.includes('/hunt'));
+        
+        if (!painelHuntJaAberto && botaoHunt) {
+            botaoHunt.click();
+            await new Promise(r => setTimeout(r, 500));
+        }
+
+        const qtd = await popularDropdownRegioes();
+        alert(`Varredura concluída! Regiões adicionadas: ${qtd}`);
+		if (!painelHuntJaAberto) {
+            const botaoFecharHunt = document.querySelector('button.pih-fechar[data-acao="fechar"]');
+            if (botaoFecharHunt) botaoFecharHunt.click();
+        }
+    });
+
+    setTimeout(async () => {
+        const painelHuntJaAberto = document.querySelector('.pih-tab');
+        await popularDropdownRegioes();
+        if (!painelHuntJaAberto) {
+            const botaoFecharHunt = document.querySelector('button.pih-fechar[data-acao="fechar"]');
+            if (botaoFecharHunt) botaoFecharHunt.click();
+        }
+    }, 2000);
     function atualizarEstadoBotao(botao, ligado) {
         botao.style.background = ligado ? '#22c55e' : '#ef4444';
         botao.textContent = ligado ? 'ON' : 'OFF';
@@ -165,10 +269,22 @@
             if (!hudAtualizado) return;
             
             const pokemonAtualNoHud = hudAtualizado.textContent.trim().split('·')[0].trim();
-            const elementoNomeHunt = document.querySelector('.pih-top .pih-hunt b');
-            if (!elementoNomeHunt) return;
+            
+			const regiaoDesejada = document.querySelector("#select-mapa-hunt").value
 
-            const pokemonMelhorHunt = elementoNomeHunt.textContent.trim();
+			const botao = document.querySelector(`body > div.pih-painel > div.pih-regioes button[data-regiao="${regiaoDesejada}"]`);
+
+			
+			if (botao) {
+				botao.click();
+			}
+			let pokemonMelhorHunt = "";
+			setTimeout(() => {
+				const elementoNomeHunt = document.querySelector('.pih-top .pih-hunt b');
+				if (!elementoNomeHunt) return;
+				pokemonMelhorHunt = elementoNomeHunt.textContent.trim();
+			},3000);
+            
 
             // Detecta a região na ficha (ex: "Outland · Nv 150")
             const elemDim = document.querySelector('.pih-dim');
@@ -255,7 +371,7 @@
                         }, 400);
                     }, 400);
                 }
-            }, 3000); 
+            }, 10000); 
         }, 400);
     }
 
