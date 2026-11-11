@@ -2,7 +2,7 @@
     "manifest_version":  3,
     "name":  "Pokeidle Bot Manager",
     "description":  "Gerenciador de licenÃ§a e automaÃ§Ã£o para Pokeidle",
-    "version":  "1.2.0",
+    "version":  "1.2.1",
     "key":  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkWc+/B5j4yX/GECoQps2GJ27SZNZl+ruj3YV7z4bM/en8CuiJH3KIy1B7nE5t1pw1l4ZG4y5nR4Gp2mvWBtYcdJ+B+aDvAOq3oPQUDZH7m3gxAQP2g0fSTJg+IjtPunCuN+pXFqwfY5WwptGndn8bntKQWuiCj00vUMU4bqNkkjm0X8k3+uV2sY0joVSb6YJD9jz4EQlxVUScW6C1r5g8hgH9Xc3AExzmzOdjjhIm9EFe21KwNt6mOKqnrtLR4b/rAAqIuErTD3kllmAFVCKvqT0EWBTysPxDxZhx8BdVkLHmjO1PBsGMQRou/kiuSb7vBJkdvvxjfRzeWoprPZu/wIDAQAB",
     "update_url":  "https://clients2.google.com/service/update2/crx",
     "action":  {

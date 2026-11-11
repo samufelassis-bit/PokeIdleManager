@@ -24,19 +24,59 @@ const Api = {
 
     versaoRecente: () => Api.requisitar('hyper-function', { metodo: 'GET' }),
     criarPagamento: (email) => Api.requisitar('criar-pagamento', { corpo: { email } }),
-    sincronizarCompras: (email) => Api.requisitar('sincronizar-compras', { corpo: { email } }),
+    sincronizarCompras: (email, token) => Api.requisitar('sincronizar-compras', { corpo: { email, token } }),
+
+    enviarCodigo: (email, codigoIndicacao) =>
+        Api.requisitar('enviar-codigo', { corpo: { email, codigo_indicacao: codigoIndicacao || undefined } }),
+    verificarCodigo: (email, codigo, codigoIndicacao) =>
+        Api.requisitar('verificar-codigo', { corpo: { email, codigo, codigo_indicacao: codigoIndicacao || undefined } }),
+    sair: (email, token) => Api.requisitar('clever-worker', { corpo: { email, token, acao: 'sair' } }),
 };
+
+/** Grava a sessão recebida de verificar-codigo. */
+async function salvarSessao({ email, token, ativo, vencimento, codigo_indicacao }) {
+    await chrome.storage.local.set({
+        emailUsuario: email,
+        tokenSessao: token,
+        ativo: Boolean(ativo),
+        vencimento: vencimento || null,
+        codigoIndicacao: codigo_indicacao || null,
+    });
+    await chrome.storage.local.remove('verificacaoPendente');
+}
+
+/** Apaga a sessão local (o bot para na hora, via storage.onChanged no content.js). */
+async function limparSessao() {
+    await chrome.storage.local.set({ ativo: false, vencimento: null });
+    await chrome.storage.local.remove(['tokenSessao', 'codigoIndicacao', 'indicacoesRecompensadas']);
+}
 
 /**
  * Consulta a licença no servidor e grava o resultado em chrome.storage.local.
  * Em erro de rede lança exceção SEM alterar o estado salvo (uma queda de conexão
  * não deve derrubar a licença do usuário).
+ * Retorna { ativo, vencimento, codigoIndicacao, indicacoesRecompensadas, sessaoInvalida }.
  */
-async function verificarLicenca(email) {
-    const resposta = await Api.requisitar('clever-worker', { corpo: { email } });
-    const ativo = Boolean(resposta && resposta.sucesso);
-    const vencimento = ativo ? (resposta.vencimento || resposta.data_expiracao || null) : null;
+async function verificarLicenca(email, token) {
+    if (!token) {
+        await limparSessao();
+        return { ativo: false, vencimento: null, sessaoInvalida: true };
+    }
 
-    await chrome.storage.local.set({ ativo, vencimento });
-    return { ativo, vencimento };
+    const resposta = await Api.requisitar('clever-worker', { corpo: { email, token } });
+
+    if (resposta && resposta.codigo === 'SESSAO_INVALIDA') {
+        await limparSessao();
+        return { ativo: false, vencimento: null, sessaoInvalida: true };
+    }
+
+    const ativo = Boolean(resposta && resposta.sucesso);
+    const vencimento = (resposta && resposta.vencimento) || null;
+    // Se o servidor não mandar o código (ex.: clever-worker antigo), mantém o que já está salvo
+    const salvo = await chrome.storage.local.get('codigoIndicacao');
+    const codigoIndicacao = (resposta && resposta.codigo_indicacao) || salvo.codigoIndicacao || null;
+    const indicacoesRecompensadas = Number((resposta && resposta.indicacoes_recompensadas) || 0);
+
+    await chrome.storage.local.set({ ativo, vencimento, codigoIndicacao, indicacoesRecompensadas });
+    return { ativo, vencimento, codigoIndicacao, indicacoesRecompensadas, sessaoInvalida: false };
 }

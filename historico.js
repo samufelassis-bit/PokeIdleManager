@@ -40,9 +40,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         return Number.isFinite(numero) ? `R$ ${numero.toFixed(2)}` : '—';
     }
 
-    const { emailUsuario } = await chrome.storage.local.get('emailUsuario');
-    if (!emailUsuario) {
-        mensagem('Nenhum e-mail encontrado na sessão.');
+    const { emailUsuario, tokenSessao } = await chrome.storage.local.get(['emailUsuario', 'tokenSessao']);
+    if (!emailUsuario || !tokenSessao) {
+        mensagem('Confirme seu e-mail no popup da extensão para ver o histórico.');
         return;
     }
 
@@ -50,7 +50,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
         // A Edge Function busca no Mercado Pago e sincroniza o retroativo
-        const res = await Api.sincronizarCompras(emailUsuario);
+        const res = await Api.sincronizarCompras(emailUsuario, tokenSessao);
+
+        if (res.codigo === 'SESSAO_INVALIDA') {
+            mensagem('Sua sessão expirou. Confirme seu e-mail novamente no popup da extensão.');
+            return;
+        }
 
         if (!res.sucesso || !Array.isArray(res.compras) || res.compras.length === 0) {
             mensagem('Nenhuma compra encontrada para este e-mail.');

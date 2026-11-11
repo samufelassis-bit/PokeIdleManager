@@ -14,11 +14,13 @@ function agendarVerificacao() {
 }
 
 async function verificarEmSegundoPlano() {
-    const { emailUsuario } = await chrome.storage.local.get('emailUsuario');
+    const { emailUsuario, tokenSessao } = await chrome.storage.local.get(['emailUsuario', 'tokenSessao']);
     if (!emailUsuario) return;
 
     try {
-        await verificarLicenca(emailUsuario);
+        // Sem token (ex.: quem atualizou de uma versão antiga) a licença local é desligada
+        // até o usuário confirmar o e-mail no popup.
+        await verificarLicenca(emailUsuario, tokenSessao);
         // O content.js reage sozinho a mudanças em chrome.storage (storage.onChanged).
     } catch (err) {
         console.error('[Background] Erro na checagem recorrente:', err);
