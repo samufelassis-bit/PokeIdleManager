@@ -54,8 +54,10 @@
     // ---- Configurações do bot (tempos e mínimos), persistidas em chrome.storage.local ----
     // O bot.js roda no mundo da página e não acessa chrome.storage: conversa por postMessage.
     const CHAVE_CONFIG = 'configBot';
-    const CAMPOS_CONFIG = ['tempoHunt', 'tempoPotion', 'tempoBall', 'minPotion', 'minBall'];
+    const CAMPOS_CONFIG = ['tempoHunt', 'tempoPotion', 'tempoBall', 'tempoRevive', 'minPotion', 'minBall', 'minRevive'];
     const TIPOS_FARM = ['xp', 'ouro', 'shiny'];
+    const TIPOS_ITEM = ['ball', 'potion', 'revive'];
+    const NOME_ITEM = /^[\p{L}\p{N} .'-]{1,40}$/u;
 
     // Aceita só os campos conhecidos, com inteiros em faixa razoável (a página não é confiável)
     function sanitizarConfig(config) {
@@ -66,6 +68,15 @@
             if (Number.isFinite(n) && n >= 0 && n <= 10000000) limpo[campo] = n;
         }
         if (TIPOS_FARM.includes(config.tipoFarm)) limpo.tipoFarm = config.tipoFarm;
+
+        // Ordem de uso dos itens: até 2 nomes por tipo ("" = não mexer / nenhum)
+        if (config.ordem && typeof config.ordem === 'object') {
+            limpo.ordem = {};
+            for (const tipo of TIPOS_ITEM) {
+                const lista = Array.isArray(config.ordem[tipo]) ? config.ordem[tipo].slice(0, 2) : [];
+                limpo.ordem[tipo] = lista.map((n) => (typeof n === 'string' && NOME_ITEM.test(n) ? n : ''));
+            }
+        }
         return limpo;
     }
 
