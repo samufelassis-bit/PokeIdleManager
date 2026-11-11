@@ -258,6 +258,22 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.tabs.create({ url: chrome.runtime.getURL('historico.html') });
     });
 
+    // ---------- Extensão /hunt (o bot verifica na página do jogo e guarda em huntInstalado) ----------
+
+    const URL_EXTENSAO_HUNT = 'https://chromewebstore.google.com/detail/mhnplloljgchpfpcpbhmcokmnefodjnh';
+
+    function mostrarAvisoHunt(huntInstalado) {
+        // undefined = ainda não verificado (o jogo não foi aberto): não mostra nada
+        $('aviso-hunt').hidden = huntInstalado !== false;
+    }
+
+    $('btn-instalar-hunt').addEventListener('click', () => chrome.tabs.create({ url: URL_EXTENSAO_HUNT }));
+
+    chrome.storage.local.get('huntInstalado', ({ huntInstalado }) => mostrarAvisoHunt(huntInstalado));
+    chrome.storage.onChanged.addListener((mudancas, area) => {
+        if (area === 'local' && mudancas.huntInstalado) mostrarAvisoHunt(mudancas.huntInstalado.newValue);
+    });
+
     btnCopiar.addEventListener('click', async () => {
         const codigo = $('lbl-indicacao').textContent.trim();
         if (!codigo || codigo.startsWith('-')) return;

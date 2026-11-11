@@ -91,6 +91,9 @@
                 );
             } else if (evento.data.acao === 'botSalvarConfig') {
                 await chrome.storage.local.set({ [CHAVE_CONFIG]: sanitizarConfig(evento.data.config) });
+            } else if (evento.data.acao === 'botStatusHunt') {
+                // O bot conferiu na página se a extensão "/hunt for PokeIdle" está instalada
+                await chrome.storage.local.set({ huntInstalado: evento.data.instalada === true, huntVerificadoEm: Date.now() });
             }
         } catch {
             // Contexto da extensão invalidado: ignora

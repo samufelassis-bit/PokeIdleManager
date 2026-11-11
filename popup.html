@@ -31,10 +31,19 @@
         .status.erro { color: #ef4444; }
         .status.aviso { color: #eab308; }
         .vencimento-info { font-size: 11px; margin-top: 4px; text-align: center; color: #bbb; }
+        .aviso-hunt { background: #422006; border: 1px solid #a16207; color: #fde68a; border-radius: 6px; padding: 8px; font-size: 11px; line-height: 1.4; margin-bottom: 10px; }
+        .aviso-hunt button { margin: 6px 0 0; }
     </style>
 </head>
 <body>
     <h3>Pokeidle Bot <span id="lbl-versao" class="versao"></span></h3>
+
+    <!-- Aparece quando o bot não encontrou a extensão /hunt na página do jogo -->
+    <div class="aviso-hunt" id="aviso-hunt" hidden>
+        <strong>Falta o /hunt for PokeIdle.</strong><br>
+        O Auto Hunt usa o ranking de hunts dessa extensão gratuita. Compras e ordem dos itens funcionam sem ela.
+        <button id="btn-instalar-hunt">Adicionar ao navegador</button>
+    </div>
 
     <!-- Tela 1: entrar com e-mail + código -->
     <section id="tela-login" hidden>

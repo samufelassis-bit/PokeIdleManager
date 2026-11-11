@@ -35,6 +35,7 @@
         nomePokemon: '.ml-nome',
         botaoMarket: 'button[data-modal="market"]',
         categoriaMarket: '.mk-lado .mk-cat',
+        modoMarket: '.cmp-op', // abas "Comprar" / "Vender" (o jogo lembra a última usada)
         cardMarket: '.mk-card',
         nomeCardMarket: '.mk-nome',
         comprarMarket: '.mk-acao.mk-pal-comprar',
@@ -53,10 +54,72 @@
     };
     const MAX_POR_COMPRA = 9999; // limite do campo de quantidade do market
 
+    // Extensão gratuita da qual o Auto Hunt depende (ranking de hunts)
+    const URL_EXTENSAO_HUNT = 'https://chromewebstore.google.com/detail/mhnplloljgchpfpcpbhmcokmnefodjnh';
+
     // =====================================================================
     // Utilidades
     // =====================================================================
-    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    // ---- Relógio ----
+    // Com a aba oculta (outra aba, janela minimizada) o Chrome segura os timers da página:
+    // 1 vez por segundo e, depois de 5 min oculta, 1 vez por MINUTO. Timers de um Web Worker
+    // não sofrem essa limitação forte, então todas as esperas do bot passam por um worker.
+    // Se o worker não puder ser criado (ex.: bloqueado pelo site), volta para o setTimeout.
+    const relogio = (() => {
+        const pendentes = new Map();
+        let proximoId = 1;
+        let worker = null;
+
+        const liberarPendentes = () => {
+            pendentes.forEach((resolver) => resolver());
+            pendentes.clear();
+        };
+
+        try {
+            const codigo = `
+                const timers = new Map();
+                onmessage = (e) => {
+                    const { id, ms } = e.data;
+                    timers.set(id, setTimeout(() => { timers.delete(id); postMessage(id); }, ms));
+                };`;
+            const url = URL.createObjectURL(new Blob([codigo], { type: 'text/javascript' }));
+            worker = new Worker(url);
+            URL.revokeObjectURL(url);
+            worker.onmessage = (e) => {
+                const resolver = pendentes.get(e.data);
+                pendentes.delete(e.data);
+                resolver?.();
+            };
+            worker.onerror = () => {
+                console.warn('[Bot Pokeidle] Relógio em worker indisponível; usando o relógio da página.');
+                worker = null;
+                liberarPendentes();
+            };
+        } catch {
+            worker = null;
+        }
+
+        return {
+            esperar(ms) {
+                if (!worker) return new Promise((r) => setTimeout(r, ms));
+                return new Promise((resolver) => {
+                    const id = proximoId++;
+                    pendentes.set(id, resolver);
+                    worker.postMessage({ id, ms });
+                });
+            },
+            encerrar() {
+                worker?.terminate();
+                worker = null;
+                liberarPendentes();
+            },
+            get usandoWorker() {
+                return Boolean(worker);
+            },
+        };
+    })();
+
+    const sleep = (ms) => relogio.esperar(ms);
     const $ = (seletor, raiz = document) => raiz.querySelector(seletor);
     const $$ = (seletor, raiz = document) => Array.from(raiz.querySelectorAll(seletor));
     const meu = (id) => document.getElementById(id);
@@ -64,15 +127,19 @@
     /** "29.936" / "1.500/un." → 29936 / 1500 */
     const numero = (texto) => parseInt(String(texto || '').replace(/\D/g, ''), 10) || 0;
 
-    /** Espera `fn` retornar um valor "truthy" (polling). Retorna null em timeout. */
+    /**
+     * Espera `fn` retornar um valor "truthy" (polling). Retorna null em timeout.
+     * Sempre confere mais uma vez depois do prazo: se a espera atrasou (aba oculta),
+     * não desiste de algo que já aconteceu.
+     */
     async function aguardar(fn, timeout = 5000, intervalo = 100) {
         const fim = Date.now() + timeout;
-        while (Date.now() < fim) {
+        for (;;) {
             const valor = fn();
             if (valor) return valor;
+            if (Date.now() >= fim) return null;
             await sleep(intervalo);
         }
-        return null;
     }
 
     function definirValor(el, valor, eventos = ['input', 'change']) {
@@ -138,6 +205,12 @@
 
         modalAberto: () => Boolean($(SEL.fecharModal)?.offsetParent),
 
+        /**
+         * O jogo só aceita uma sessão por conta: se o jogador abriu outra aba, esta mostra
+         * "Conta aberta em outro lugar" com o botão "Jogar aqui" e ignora compras e trocas.
+         */
+        sessaoPausada: () => $$('button').some((b) => b.offsetParent && /jogar aqui/i.test(b.textContent)),
+
         async fecharModal() {
             if (!jogo.modalAberto()) return;
             $(SEL.fecharModal).click();
@@ -191,6 +264,9 @@
         #${ID_PAINEL} .bp-ordem .bp-rotulo { flex: none; width: 40px; }
         #${ID_PAINEL} .bp-lupa { background: #3b82f6; color: #fff; border: none; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 10px; }
         #${ID_PAINEL} .bp-check { cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 11px; }
+        #${ID_PAINEL} .bp-aviso { background: #422006; border: 1px solid #a16207; color: #fde68a; border-radius: 6px; padding: 6px 8px; font-size: 11px; line-height: 1.4; }
+        #${ID_PAINEL} .bp-aviso a { display: block; margin-top: 4px; color: #fff; background: #2563eb; border-radius: 4px; padding: 4px; text-align: center; text-decoration: none; font-weight: bold; }
+        #${ID_PAINEL} [hidden] { display: none !important; }
     `;
 
     function campoNumero(id, rotulo, valor) {
@@ -228,6 +304,10 @@
                 titulo: 'Auto Hunt',
                 idBotao: 'btn-auto-hunt',
                 campos: `
+                    <div class="bp-aviso" id="aviso-hunt" hidden>
+                        O Auto Hunt precisa da extensão gratuita <b>/hunt for PokeIdle</b>.
+                        <a href="${URL_EXTENSAO_HUNT}" target="_blank" rel="noopener noreferrer">Adicionar ao navegador</a>
+                    </div>
                     ${campoNumero('input-tempo-hunt', 'Tempo (s):', 600)}
                     <div class="bp-linha">
                         <span class="bp-rotulo">Tipo de farm:</span>
@@ -288,21 +368,31 @@
             this.idTempo = idTempo;
             this.tempoPadrao = tempoPadrao;
             this.executar = executar;
-            this.timer = null;
+            this.ciclo = null; // objeto único de cada "ligar"; null = desligada
             this.emExecucao = false;
-            this.botao.addEventListener('click', () => (this.timer === null ? this.ligar() : this.desligar()));
+            this.botao.addEventListener('click', () => (this.ciclo === null ? this.ligar() : this.desligar()));
         }
 
+        get ligada() {
+            return this.ciclo !== null;
+        }
+
+        /** Laço com o relógio do worker (o setInterval da página é segurado com a aba oculta). */
         ligar() {
             const segundos = lerInt(this.idTempo, this.tempoPadrao, 5);
-            this.timer = setInterval(() => this.rodar(), segundos * 1000);
+            const ciclo = {};
+            this.ciclo = ciclo;
             this.atualizarBotao(true);
-            this.rodar();
+            (async () => {
+                while (this.ciclo === ciclo) {
+                    this.rodar();
+                    await sleep(segundos * 1000);
+                }
+            })();
         }
 
         desligar() {
-            clearInterval(this.timer);
-            this.timer = null;
+            this.ciclo = null;
             this.atualizarBotao(false);
         }
 
@@ -313,9 +403,11 @@
 
         async rodar() {
             if (this.emExecucao) return;
+            // Sessão aberta em outra aba: o jogo ignoraria tudo; tenta de novo no próximo ciclo
+            if (jogo.sessaoPausada()) return;
             this.emExecucao = true;
             try {
-                await comTrava(() => (this.timer === null ? null : this.executar()));
+                await comTrava(() => (this.ligada && !jogo.sessaoPausada() ? this.executar() : null));
             } catch (erro) {
                 console.error('[Bot Pokeidle]', erro);
             } finally {
@@ -379,8 +471,21 @@
         alert(`Varredura concluída! Regiões adicionadas: ${qtd}`);
     });
 
-    // Carga automática das regiões: vigia até o botão /hunt existir e então preenche o dropdown
     let encerrado = false;
+
+    // ---- O /hunt está instalado? ----
+    // Ele roda no mundo da página desde o início do carregamento (cria window.__pokeidleHunt)
+    // e desenha o botão "/hunt" alguns segundos depois. O resultado vai para o content.js,
+    // que guarda para o popup mostrar o botão de instalar.
+    (async () => {
+        const instalada =
+            Boolean(window.__pokeidleHunt) || Boolean(await aguardar(() => encerrado || jogo.botaoHunt(), 30000, 1000));
+        if (encerrado) return;
+        meu('aviso-hunt').hidden = instalada;
+        enviarParaExtensao({ acao: 'botStatusHunt', instalada });
+    })();
+
+    // Carga automática das regiões: vigia até o botão /hunt existir e então preenche o dropdown
 
     (async () => {
         const botao = await aguardar(() => encerrado || jogo.botaoHunt(), Infinity, 1000);
@@ -711,16 +816,32 @@
         return el ? numero(el.textContent) : 0;
     }
 
+    /** Textos curtos visíveis que parecem aviso do jogo (toast, erro), para explicar uma compra que falhou. */
+    function mensagensVisiveisDoJogo() {
+        return $$('[class*="toast"], [class*="aviso"], [class*="notif"], [class*="erro"], [role="alert"], [role="status"]')
+            .filter((el) => el.offsetParent && !el.closest(`#${ID_PAINEL}`) && el.textContent.trim().length > 0)
+            .map((el) => el.textContent.trim().replace(/\s+/g, ' ').slice(0, 140))
+            .slice(0, 2)
+            .join(' | ');
+    }
+
     const cardDoItem = (nome) =>
         $$(SEL.cardMarket).find((c) => normalizarNome($(SEL.nomeCardMarket, c)?.textContent) === normalizarNome(nome));
 
     async function abrirCategoriaMarket(categoria) {
-        if (!$(SEL.categoriaMarket)?.offsetParent) {
+        const abaComprar = () => $$(SEL.modoMarket).find((b) => b.offsetParent && normalizarNome(b.textContent) === 'comprar');
+
+        if (!jogo.modalAberto() || !abaComprar()) {
             const botao = $(SEL.botaoMarket);
             if (!botao) return false;
             botao.click();
-            if (!(await aguardar(() => $(SEL.categoriaMarket)?.offsetParent, 3000))) return false;
+            if (!(await aguardar(() => abaComprar(), 3000))) return false;
         }
+        // O market reabre na última aba usada: se o jogador usou "Vender", volta para "Comprar"
+        const comprar = abaComprar();
+        if (!comprar.classList.contains('on')) comprar.click();
+        if (!(await aguardar(() => $(SEL.categoriaMarket)?.offsetParent, 3000))) return false;
+
         const aba = $$(SEL.categoriaMarket).find((c) => normalizarNome(c.textContent).startsWith(categoria));
         if (!aba) return false;
         aba.click();
@@ -770,8 +891,13 @@
                 card.querySelector(SEL.comprarMarket)?.click();
 
                 // O "você tem" do market não atualiza: a confirmação vem da quantidade no chip
-                if (!(await aguardar(() => qtdAtual() > atual, 4000, 200))) {
-                    console.warn('[Bot Pokeidle] Compra não confirmada:', nome, quantidade);
+                if (!(await aguardar(() => qtdAtual() > atual, 6000, 200))) {
+                    if (jogo.sessaoPausada()) break; // outra aba assumiu a sessão no meio da compra
+                    const mensagem = mensagensVisiveisDoJogo();
+                    console.warn(
+                        `[Bot Pokeidle] Compra não confirmada: ${quantidade}x ${nome} (estoque ${atual}, mínimo ${minimo}).` +
+                        (mensagem ? ` Mensagem do jogo: "${mensagem}"` : ' O jogo não mostrou mensagem.')
+                    );
                     break;
                 }
             }
@@ -864,6 +990,7 @@
         encerrado = true;
         clearTimeout(timerSalvar);
         automacoes.forEach((a) => a.desligar());
+        relogio.encerrar();
         window.removeEventListener('message', aoReceberMensagem);
         document.removeEventListener('change', aoMudarNoJogo, true);
         document.getElementById(ID_PAINEL)?.remove();
