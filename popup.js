@@ -22,13 +22,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const divStatus = $('status');
     const divVencimento = $('vencimento');
-    const divAviso = $('aviso-versao');
 
-    const VERSAO_ATUAL = chrome.runtime.getManifest().version;
-    $('lbl-versao').textContent = `v${VERSAO_ATUAL}`;
+    // Atualizações chegam pela Chrome Web Store; a versão aparece só como informação
+    $('lbl-versao').textContent = `v${chrome.runtime.getManifest().version}`;
 
     const VALIDADE_CODIGO_MS = 10 * 60 * 1000; // igual ao servidor (enviar-codigo)
-    let bloqueadoPorVersao = false;
     let timerReenvio = null;
 
     // ---------- Utilidades ----------
@@ -41,18 +39,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch {
             return null;
         }
-    }
-
-    /** true se a versão `a` for maior que `b` (comparação numérica, ex.: 1.10.0 > 1.9.0). */
-    function versaoMaior(a, b) {
-        const pa = String(a).split('.').map(Number);
-        const pb = String(b).split('.').map(Number);
-        for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-            const x = pa[i] || 0;
-            const y = pb[i] || 0;
-            if (x !== y) return x > y;
-        }
-        return false;
     }
 
     function mostrarStatus(texto, tipo) {
@@ -85,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             return await promessa();
         } finally {
-            botao.disabled = bloqueadoPorVersao;
+            botao.disabled = false;
         }
     }
 
@@ -107,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
         telaLogin.hidden = false;
         inputEmail.value = email;
         inputIndicacao.value = indicacao;
-        inputEmail.disabled = aguardandoCodigo || bloqueadoPorVersao;
+        inputEmail.disabled = aguardandoCodigo;
         blocoPedir.hidden = aguardandoCodigo;
         blocoCodigo.hidden = !aguardandoCodigo;
         mostrarVencimento(null);
@@ -126,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(timerReenvio);
         let restante = Math.max(0, Math.ceil(segundos));
         const atualizar = () => {
-            btnReenviar.disabled = restante > 0 || bloqueadoPorVersao;
+            btnReenviar.disabled = restante > 0;
             btnReenviar.textContent = restante > 0 ? `Reenviar código (${restante}s)` : 'Reenviar código';
             if (restante-- <= 0) clearInterval(timerReenvio);
         };
@@ -296,48 +282,6 @@ document.addEventListener('DOMContentLoaded', () => {
         mostrarTelaLogin({ email: emailUsuario || '' });
     }));
 
-    // ---------- Aviso de atualização ----------
-
-    function mostrarAvisoAtualizacao({ mensagem, url, obrigatorio }) {
-        divAviso.className = `aviso-versao${obrigatorio ? ' obrigatorio' : ''}`;
-        divAviso.replaceChildren();
-
-        const titulo = document.createElement('strong');
-        titulo.textContent = obrigatorio ? 'Atualização Obrigatória!' : 'Nova Versão Disponível!';
-        divAviso.append(titulo, document.createElement('br'));
-        divAviso.append(mensagem || 'Baixe a versão mais recente para continuar.', document.createElement('br'));
-
-        const href = urlHttpsSegura(url);
-        if (href) {
-            const link = document.createElement('a');
-            link.href = href;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.textContent = 'Atualizar Agora';
-            divAviso.append(link);
-        }
-
-        if (obrigatorio) {
-            bloqueadoPorVersao = true;
-            document.querySelectorAll('input, button').forEach((el) => { el.disabled = true; });
-        }
-    }
-
-    async function verificarVersao() {
-        try {
-            const data = await Api.versaoRecente();
-            if (data.versao_recente && versaoMaior(data.versao_recente, VERSAO_ATUAL)) {
-                mostrarAvisoAtualizacao({
-                    mensagem: data.mensagem,
-                    url: data.url,
-                    obrigatorio: Boolean(data.atualizacao_obrigatoria),
-                });
-            }
-        } catch (err) {
-            console.error('Erro ao verificar versão:', err);
-        }
-    }
-
     // ---------- Inicialização ----------
 
     async function iniciar() {
@@ -366,5 +310,5 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dados.emailUsuario) mostrarStatus('Status: Confirme seu e-mail para continuar', 'aviso');
     }
 
-    iniciar().then(verificarVersao);
+    iniciar();
 });

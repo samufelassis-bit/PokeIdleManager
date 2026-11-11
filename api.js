@@ -22,7 +22,6 @@ const Api = {
         }
     },
 
-    versaoRecente: () => Api.requisitar('hyper-function', { metodo: 'GET' }),
     criarPagamento: (email) => Api.requisitar('criar-pagamento', { corpo: { email } }),
     sincronizarCompras: (email, token) => Api.requisitar('sincronizar-compras', { corpo: { email, token } }),
 
