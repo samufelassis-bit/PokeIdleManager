@@ -4,7 +4,7 @@
 
 # Pokeidle Bot Manager
 
-**Automação para o PokeIdle: Auto Hunt, compra automática de poções, bolas e revives e ordem de uso dos itens.**
+**Automação para o PokeIdle: Auto Hunt, Auto Captura, compra automática de poções, bolas e revives e painel em janela flutuante.**
 
 [![Instalar no Chrome](https://img.shields.io/badge/Chrome-Instalar%20extens%C3%A3o-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/pfbcacchejpkpnmfdmcfohlpnnhjkndg)
 [![Usar no Edge](https://img.shields.io/badge/Edge-Usar%20no%20navegador-0078D7?style=for-the-badge&logo=microsoftedge&logoColor=white)](https://chromewebstore.google.com/detail/pfbcacchejpkpnmfdmcfohlpnnhjkndg)
@@ -35,12 +35,25 @@
 - **Auto Potion**, **Auto Ball** e **Auto Revive** mantêm o estoque acima do mínimo que você definir.
 - Compra em lotes de até 9.999 unidades, conferindo o ouro antes e confirmando cada compra.
 
-### 📋 Ordem de uso dos itens
-- Escolha o **1º e o 2º item** de cada tipo (bolas, poções e revives). O jogo usa o 1º até acabar e depois o 2º.
-- As opções saem dos itens que o próprio jogo mostra.
-- **Usar Revive ao desmaiar** e **Voltar à hunt ao morrer** direto no painel do bot.
+### 🎯 Auto Captura
+- Joga **1 bola em cada pokémon caído**, com a bola escolhida no jogo.
+- Confere cada arremesso: se o jogo ignorar o clique, tenta de novo.
+- A lista **Proximidade para Capturar** aparece dentro do painel do bot, igual à do jogo.
 
-<img src="docs/itens.png" alt="Ordem de uso dos itens" width="640">
+<img src="docs/auto-captura.png" alt="Auto Captura" width="640">
+
+### 📋 Itens: o painel Auto do jogo dentro do bot
+- Bolas, poções e revives com as **imagens e quantidades do jogo**, sempre atualizadas.
+- Tudo que você clica no bot acontece no jogo: ligar itens, "Usar Revive ao desmaiar", "Voltar à hunt ao morrer" e a barra de uso da poção.
+- O jogo usa os itens na ordem em que foram ativados, e a compra automática repõe o 1º dessa ordem.
+
+<img src="docs/itens.png" alt="Painel Auto do jogo dentro do bot" width="640">
+
+### 🪟 Painel do seu jeito
+- **Arraste** pelo título e **redimensione** pelo canto. O painel lembra a posição e o tamanho; duplo clique no título volta ao padrão.
+- **Janela flutuante (⧉):** o painel sai para uma janela PiP, que fica por cima de outros programas.
+
+<img src="docs/painel.png" alt="Painel em janela flutuante" width="640">
 
 ### 🌙 Funciona com o navegador minimizado
 Com a aba oculta (outra aba selecionada ou janela minimizada), o Chrome desacelera os timers da página para 1 vez por minuto. O bot usa um relógio próprio, num Web Worker, e continua no ritmo normal.

@@ -122,7 +122,9 @@
     const sleep = (ms) => relogio.esperar(ms);
     const $ = (seletor, raiz = document) => raiz.querySelector(seletor);
     const $$ = (seletor, raiz = document) => Array.from(raiz.querySelectorAll(seletor));
-    const meu = (id) => document.getElementById(id);
+    // Busca dentro do painel: no modo PiP ele mora em outra janela, fora do document do jogo
+    let painel = null;
+    const meu = (id) => painel?.querySelector(`#${id}`) || document.getElementById(id);
 
     /** "29.936" / "1.500/un." → 29936 / 1500 */
     const numero = (texto) => parseInt(String(texto || '').replace(/\D/g, ''), 10) || 0;
@@ -246,10 +248,17 @@
     // Painel (UI)
     // =====================================================================
     const ESTILO_CSS = `
-        #${ID_PAINEL} { position: fixed; top: 10px; right: 10px; z-index: 99999; background: #1a1a1a; color: #fff; padding: 12px; border-radius: 10px; font: 12px sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,.5); display: flex; flex-direction: column; gap: 10px; width: 250px; border: 1px solid #333; max-height: calc(100vh - 20px); box-sizing: border-box; }
-        #${ID_PAINEL} .bp-topo { font-weight: bold; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 6px; color: #4ade80; }
+        #${ID_PAINEL} { position: fixed; top: 10px; right: 10px; z-index: 99999; background: #1a1a1a; color: #fff; padding: 12px; border-radius: 10px; font: 12px sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,.5); display: flex; flex-direction: column; gap: 10px; width: 250px; border: 1px solid #333; max-height: calc(100vh - 20px); box-sizing: border-box; resize: both; overflow: hidden; min-width: 220px; min-height: 60px; }
+        #${ID_PAINEL} .bp-topo { font-weight: bold; display: flex; justify-content: space-between; align-items: center; gap: 6px; border-bottom: 1px solid #333; padding-bottom: 6px; color: #4ade80; cursor: move; user-select: none; touch-action: none; flex: none; }
+        #${ID_PAINEL} .bp-topo-botoes { display: flex; gap: 4px; }
         #${ID_PAINEL} .bp-min { background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; width: 20px; height: 20px; cursor: pointer; font-size: 10px; padding: 0; display: flex; align-items: center; justify-content: center; }
-        #${ID_PAINEL} .bp-conteudo { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-height: 0; }
+        #${ID_PAINEL} .bp-conteudo { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+        #${ID_PAINEL}.bp-pip { position: static !important; width: 100% !important; height: 100vh !important; max-height: none; border-radius: 0; border: 0; resize: none; }
+        #${ID_PAINEL}.bp-pip .bp-topo { cursor: default; }
+        #${ID_PAINEL} .bp-espelho .caidos { position: static; width: auto; }
+        #${ID_PAINEL} .bp-espelho .caidos-lista:empty::after { content: 'Nenhum pokémon caído por perto'; display: block; padding: 6px 2px; font-size: 10.5px; color: var(--sobre-mad-dim, #aaa); }
+        #${ID_PAINEL} .bp-espelho-auto { border-radius: 8px; padding: 2px 10px 8px; }
+        #${ID_PAINEL} .bp-espelho-auto .painel-corpo-auto { margin-top: 6px; }
         #${ID_PAINEL} .bp-secao { display: flex; flex-direction: column; gap: 4px; }
         #${ID_PAINEL} .bp-secao + .bp-secao { border-top: 1px solid #333; padding-top: 8px; }
         #${ID_PAINEL} .bp-linha { display: flex; justify-content: space-between; align-items: center; gap: 4px; }
@@ -261,7 +270,6 @@
         #${ID_PAINEL} input[type=number] { width: 70px; text-align: center; }
         #${ID_PAINEL} select { flex: 1; font-size: 10px; min-width: 0; }
         #${ID_PAINEL} #select-tipo-farm { flex: none; width: 78px; font-size: 11px; }
-        #${ID_PAINEL} .bp-ordem .bp-rotulo { flex: none; width: 40px; }
         #${ID_PAINEL} .bp-lupa { background: #3b82f6; color: #fff; border: none; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 10px; }
         #${ID_PAINEL} .bp-check { cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 11px; }
         #${ID_PAINEL} .bp-aviso { background: #422006; border: 1px solid #a16207; color: #fde68a; border-radius: 6px; padding: 6px 8px; font-size: 11px; line-height: 1.4; }
@@ -281,24 +289,21 @@
             </div>`;
     }
 
-    function linhaOrdem(tipo) {
-        return `
-            <div class="bp-linha bp-ordem">
-                <span class="bp-rotulo">${TIPOS_ITEM[tipo].rotulo}</span>
-                <select id="ordem-${tipo}-1" data-tipo="${tipo}" title="1º a ser usado"><option value="">(não mexer)</option></select>
-                <select id="ordem-${tipo}-2" data-tipo="${tipo}" title="Usado quando o 1º acabar"><option value="">(nenhum)</option></select>
-            </div>`;
-    }
-
     const estilo = document.createElement('style');
     estilo.id = ID_ESTILO;
     estilo.textContent = ESTILO_CSS;
     document.head.appendChild(estilo);
 
-    const painel = document.createElement('div');
+    painel = document.createElement('div');
     painel.id = ID_PAINEL;
     painel.innerHTML = `
-        <div class="bp-topo"><span>Auto Bot Manager</span><button class="bp-min" id="btn-minimizar">−</button></div>
+        <div class="bp-topo" id="painel-topo" title="Arraste para mover · canto inferior direito redimensiona">
+            <span>Auto Bot Manager</span>
+            <span class="bp-topo-botoes">
+                <button class="bp-min" id="btn-pip" title="Abrir em janela flutuante (PiP)">⧉</button>
+                <button class="bp-min" id="btn-minimizar" title="Minimizar">−</button>
+            </span>
+        </div>
         <div class="bp-conteudo" id="painel-conteudo">
             ${secaoAuto({
                 titulo: 'Auto Hunt',
@@ -341,23 +346,184 @@
                 campos: campoNumero('input-min-revive', 'Mín Revive:', 100) + campoNumero('input-tempo-revive', 'Tempo (s):', 300),
             })}
             <div class="bp-secao">
-                <span class="bp-titulo">Itens (ordem de uso)</span>
-                <span class="bp-rotulo">O jogo usa o 1º até acabar e depois o 2º. A compra repõe o 1º.</span>
-                ${linhaOrdem('ball')}
-                ${linhaOrdem('potion')}
-                ${linhaOrdem('revive')}
-                <label class="bp-check"><input type="checkbox" id="chk-usar-revive" disabled> Usar Revive ao desmaiar</label>
-                <label class="bp-check"><input type="checkbox" id="chk-voltar-hunt" disabled> Voltar à hunt ao morrer/reset</label>
+                <div class="bp-linha"><span class="bp-titulo">Auto Captura</span><button class="bp-toggle" id="btn-auto-captura">OFF</button></div>
+                <span class="bp-rotulo">Joga 1 bola em cada pokémon caído, com 1 s entre arremessos. A bola é a escolhida abaixo.</span>
+                <div class="bp-espelho" id="espelho-caidos"></div>
+            </div>
+            <div class="bp-secao">
+                <span class="bp-titulo">Itens (painel Auto do jogo)</span>
+                <span class="bp-rotulo">O que você clicar aqui acontece no jogo. O jogo usa os itens na ordem em que foram ativados.</span>
+                <div class="bp-espelho bp-espelho-auto" id="espelho-auto"></div>
             </div>
         </div>`;
     document.body.appendChild(painel);
 
     let minimizado = false;
+    let alturaAntesDeMinimizar = '';
     meu('btn-minimizar').addEventListener('click', () => {
         minimizado = !minimizado;
         meu('painel-conteudo').style.display = minimizado ? 'none' : 'flex';
         meu('btn-minimizar').textContent = minimizado ? '+' : '−';
+        // Altura definida pelo redimensionamento: some ao minimizar e volta ao expandir
+        if (minimizado) {
+            alturaAntesDeMinimizar = painel.style.height;
+            painel.style.height = '';
+        } else if (alturaAntesDeMinimizar) {
+            painel.style.height = alturaAntesDeMinimizar;
+        }
     });
+
+    // =====================================================================
+    // Painel: arrastar, redimensionar e janela flutuante (Picture-in-Picture)
+    // =====================================================================
+    const CHAVE_LAYOUT = 'pokeidleBotLayout';
+    let janelaPip = null;
+
+    function lerLayout() {
+        try {
+            return JSON.parse(localStorage.getItem(CHAVE_LAYOUT)) || {};
+        } catch {
+            return {};
+        }
+    }
+
+    function salvarLayout() {
+        if (janelaPip || minimizado) return;
+        try {
+            const r = painel.getBoundingClientRect();
+            const layout = { width: Math.round(r.width) };
+            if (painel.style.left) Object.assign(layout, { left: Math.round(r.left), top: Math.round(r.top) });
+            if (painel.style.height) layout.height = Math.round(r.height);
+            localStorage.setItem(CHAVE_LAYOUT, JSON.stringify(layout));
+        } catch {
+            /* sem localStorage: o painel só não lembra a posição */
+        }
+    }
+
+    /** Mantém pelo menos o topo do painel dentro da janela do jogo, e a base acima da borda de baixo. */
+    function posicionar(left, top) {
+        const largura = painel.offsetWidth;
+        const y = Math.min(Math.max(top, 0), window.innerHeight - 30);
+        painel.style.left = `${Math.min(Math.max(left, 60 - largura), window.innerWidth - 60)}px`;
+        painel.style.top = `${y}px`;
+        painel.style.right = 'auto';
+        painel.style.maxHeight = `${window.innerHeight - y - 10}px`;
+    }
+
+    function aplicarLayout(layout) {
+        if (layout.width >= 220) painel.style.width = `${layout.width}px`;
+        if (layout.height >= 60) painel.style.height = `${layout.height}px`;
+        if (Number.isFinite(layout.left) && Number.isFinite(layout.top)) posicionar(layout.left, layout.top);
+    }
+    aplicarLayout(lerLayout());
+
+    const topo = meu('painel-topo');
+    topo.addEventListener('pointerdown', (e) => {
+        if (janelaPip || e.button !== 0 || e.target.closest('button')) return;
+        e.preventDefault();
+        const r = painel.getBoundingClientRect();
+        const dx = e.clientX - r.left;
+        const dy = e.clientY - r.top;
+        topo.setPointerCapture(e.pointerId);
+        const mover = (ev) => posicionar(ev.clientX - dx, ev.clientY - dy);
+        const soltar = () => {
+            topo.removeEventListener('pointermove', mover);
+            topo.removeEventListener('pointerup', soltar);
+            topo.removeEventListener('pointercancel', soltar);
+            salvarLayout();
+        };
+        topo.addEventListener('pointermove', mover);
+        topo.addEventListener('pointerup', soltar);
+        topo.addEventListener('pointercancel', soltar);
+    });
+
+    // Duplo clique no topo: volta para o canto superior direito, no tamanho padrão
+    topo.addEventListener('dblclick', (e) => {
+        if (janelaPip || e.target.closest('button')) return;
+        painel.style.cssText = '';
+        try { localStorage.removeItem(CHAVE_LAYOUT); } catch { /* ignora */ }
+    });
+
+    // Fim do redimensionamento (alça nativa do canto): salva o tamanho
+    let timerLayout = null;
+    const observadorTamanho = new ResizeObserver(() => {
+        clearTimeout(timerLayout);
+        timerLayout = setTimeout(salvarLayout, 400);
+    });
+    observadorTamanho.observe(painel);
+
+    const aoRedimensionarJanela = () => {
+        if (!janelaPip && painel.style.left) posicionar(parseFloat(painel.style.left), parseFloat(painel.style.top));
+    };
+    window.addEventListener('resize', aoRedimensionarJanela);
+
+    /** Copia o CSS do jogo e do bot para a janela PiP (os elementos espelhados usam as classes do jogo). */
+    function copiarEstilos(destino) {
+        const base = destino.createElement('base');
+        base.href = location.href;
+        destino.head.appendChild(base);
+        for (const folha of document.styleSheets) {
+            if (folha.href) {
+                // Arquivo externo: o link resolve os url() relativos ao próprio CSS
+                const link = destino.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = folha.href;
+                destino.head.appendChild(link);
+                continue;
+            }
+            try {
+                const st = destino.createElement('style');
+                st.textContent = Array.from(folha.cssRules, (r) => r.cssText).join('\n');
+                destino.head.appendChild(st);
+            } catch {
+                /* folha inacessível: segue sem ela */
+            }
+        }
+    }
+
+    function voltarDoPip() {
+        janelaPip = null;
+        painel.classList.remove('bp-pip');
+        meu('btn-pip').textContent = '⧉';
+        meu('btn-pip').title = 'Abrir em janela flutuante (PiP)';
+        if (encerrado) return;
+        document.body.appendChild(painel);
+        aplicarLayout(lerLayout());
+        espelhos.forEach((e) => e.render());
+    }
+
+    meu('btn-pip').addEventListener('click', async () => {
+        if (janelaPip) {
+            janelaPip.close(); // dispara o pagehide, que devolve o painel
+            return;
+        }
+        if (!('documentPictureInPicture' in window)) {
+            alert('Este navegador não abre janelas flutuantes (PiP). Use o Chrome 116 ou mais novo.');
+            return;
+        }
+        try {
+            const r = painel.getBoundingClientRect();
+            const pip = await window.documentPictureInPicture.requestWindow({
+                width: Math.max(260, Math.round(r.width)),
+                height: Math.min(Math.max(320, Math.round(r.height)), 900),
+            });
+            copiarEstilos(pip.document);
+            pip.document.title = 'Pokeidle Bot';
+            pip.document.body.style.cssText = 'margin:0;background:#1a1a1a;overflow:hidden;';
+            painel.classList.add('bp-pip');
+            pip.document.body.appendChild(painel);
+            janelaPip = pip;
+            meu('btn-pip').textContent = '⇲';
+            meu('btn-pip').title = 'Voltar o painel para a tela do jogo';
+            espelhos.forEach((e) => e.render()); // redesenha os canvas na nova janela
+            pip.addEventListener('pagehide', voltarDoPip, { once: true });
+        } catch (erro) {
+            console.warn('[Bot Pokeidle] Não foi possível abrir a janela flutuante:', erro);
+        }
+    });
+
+    /** alert() na janela onde o painel está (no PiP, o alert da página ficaria escondido). */
+    const avisar = (texto) => (painel.ownerDocument.defaultView || window).alert(texto);
 
     // =====================================================================
     // Agendador: liga/desliga uma rotina periódica sem execuções sobrepostas
@@ -468,7 +634,7 @@
             if (abriu) jogo.fecharPainelHunt();
             return adicionadas;
         });
-        alert(`Varredura concluída! Regiões adicionadas: ${qtd}`);
+        avisar(`Varredura concluída! Regiões adicionadas: ${qtd}`);
     });
 
     let encerrado = false;
@@ -504,131 +670,305 @@
     })();
 
     // =====================================================================
-    // Itens: ordem de uso (1º / 2º) e opções do jogo espelhadas no painel
+    // Espelhos: cópias vivas de partes da tela do jogo dentro do painel do bot
     // =====================================================================
-    let ordemSalva = null; // vinda do chrome.storage; pode chegar antes ou depois dos chips existirem
-    let opcoesProntas = false;
-
-    function preencherSelect(select, nomes, valor) {
-        const primeira = select.options[0];
-        select.replaceChildren(primeira);
-        nomes.forEach((nome) => {
-            const opt = document.createElement('option');
-            opt.value = nome;
-            opt.textContent = nome;
-            select.appendChild(opt);
-        });
-        select.value = nomes.includes(valor) ? valor : '';
-    }
-
-    /** Gera as opções de cada tipo a partir dos chips que o jogo mostra. */
-    function popularOpcoesItens() {
-        for (const tipo of Object.keys(TIPOS_ITEM)) {
-            const nomes = chipsDoTipo(tipo).map((c) => c.nome).filter(Boolean);
-            const [v1 = '', v2 = ''] = ordemSalva?.[tipo] || [];
-            preencherSelect(meu(`ordem-${tipo}-1`), nomes, v1);
-            preencherSelect(meu(`ordem-${tipo}-2`), nomes, v2);
-        }
-        opcoesProntas = true;
-    }
-
-    /** Itens escolhidos no painel, na ordem (sem repetição). Vazio = o bot não mexe nesse tipo. */
-    function ordemEscolhida(tipo) {
-        const primeiro = meu(`ordem-${tipo}-1`).value;
-        const segundo = meu(`ordem-${tipo}-2`).value;
-        if (!primeiro) return [];
-        return segundo && segundo !== primeiro ? [primeiro, segundo] : [primeiro];
-    }
-
-    /** Liga/desliga um chip e espera o jogo refletir. */
-    async function alternarChip(tipo, nome, ligar) {
-        const chip = chipPorNome(tipo, nome);
-        if (!chip || chip.on === ligar) return Boolean(chip);
-        chip.el.click();
-        const ok = await aguardar(() => chipPorNome(tipo, nome)?.on === ligar, 2500);
-        await sleep(300);
-        return Boolean(ok);
-    }
-
     /**
-     * Deixa marcados no jogo só os itens escolhidos, ativando-os na ordem escolhida:
-     * o jogo usa os itens na ordem em que foram ativados.
-     * Nunca deixa o tipo sem nenhum item marcado: com zero marcados o servidor responde
-     * atrasado e desfaz o clique seguinte (visto em teste ao vivo).
-     * Sem `forcar`, só mexe se os itens marcados forem diferentes dos escolhidos.
+     * Clona um elemento do jogo para dentro do painel e mantém a cópia em dia.
+     * As classes do jogo são globais, então a cópia fica com a mesma aparência.
+     * Todo clique na cópia é repassado ao elemento original: quem age é sempre o próprio jogo.
      */
-    async function aplicarOrdem(tipo, forcar = false) {
-        const ordem = ordemEscolhida(tipo);
-        if (!ordem.length || !chipsDoTipo(tipo).length) return;
+    class Espelho {
+        constructor({ origem, destino, ajustar }) {
+            this.origem = origem; // função: o elemento do jogo pode ser recriado
+            this.destino = destino;
+            this.ajustar = ajustar;
+            this.alvo = null;
+            this.raiz = null;
+            this.agendado = false;
+            this.pausado = false;
+            this.pendente = false;
+            this.observador = new MutationObserver(() => this.agendar());
 
-        const desejados = ordem.map(normalizarNome);
-        const ligados = chipsDoTipo(tipo).filter((c) => c.on).map((c) => normalizarNome(c.nome));
-        const mesmos = ligados.length === desejados.length && desejados.every((n) => ligados.includes(n));
-        if (mesmos && !forcar) return;
+            // Enquanto o botão do mouse está apertado na cópia, ela não é recriada (senão o clique se perde)
+            destino.addEventListener('pointerdown', () => {
+                this.pausado = true;
+                const doc = destino.ownerDocument;
+                const soltar = () => {
+                    doc.removeEventListener('pointerup', soltar, true);
+                    doc.removeEventListener('pointercancel', soltar, true);
+                    // Depois do click, que vem logo após o pointerup
+                    setTimeout(() => {
+                        this.pausado = false;
+                        if (this.pendente) this.render();
+                    }, 50);
+                };
+                doc.addEventListener('pointerup', soltar, true);
+                doc.addEventListener('pointercancel', soltar, true);
+            }, true);
 
-        const [primeiro, segundo] = ordem;
-        // 1) Garante o 1º ligado
-        if (!(await alternarChip(tipo, primeiro, true))) return;
-        // 2) Desliga o que não foi escolhido (o 1º continua ligado)
-        for (const chip of chipsDoTipo(tipo)) {
-            if (chip.on && !desejados.includes(normalizarNome(chip.nome))) await alternarChip(tipo, chip.nome, false);
+            destino.addEventListener('click', (e) => this.repassarClique(e), true);
+            destino.addEventListener('input', (e) => this.repassarValor(e, 'input'), true);
+            destino.addEventListener('change', (e) => this.repassarValor(e, 'change'), true);
         }
-        // 3) Religa o 2º para que ele fique depois do 1º na ordem de ativação
-        if (segundo) {
-            await alternarChip(tipo, segundo, false);
-            await alternarChip(tipo, segundo, true);
+
+        agendar() {
+            if (this.agendado) return;
+            this.agendado = true;
+            queueMicrotask(() => {
+                this.agendado = false;
+                this.render();
+            });
+        }
+
+        render() {
+            if (this.pausado) {
+                this.pendente = true;
+                return;
+            }
+            this.pendente = false;
+            const origem = this.origem();
+            if (origem !== this.alvo) {
+                this.observador.disconnect();
+                this.alvo = origem;
+                if (origem) this.observador.observe(origem, { subtree: true, childList: true, attributes: true, characterData: true });
+            }
+            if (!origem) {
+                this.destino.replaceChildren();
+                this.raiz = null;
+                return;
+            }
+
+            const clone = origem.cloneNode(true);
+            const originais = [origem, ...origem.querySelectorAll('*')];
+            const copias = [clone, ...clone.querySelectorAll('*')];
+            const canvas = [];
+            copias.forEach((c, i) => {
+                const o = originais[i];
+                // Sem ids repetidos: o jogo e o próprio bot procuram elementos por id
+                c.removeAttribute('id');
+                c.removeAttribute('for');
+                if (o.tagName === 'INPUT') {
+                    c.checked = o.checked; // o estado vive na propriedade, não no atributo
+                    c.value = o.value;
+                } else if (o.tagName === 'IMG') {
+                    c.src = o.src; // endereço completo: funciona também na janela PiP
+                } else if (o.tagName === 'CANVAS') {
+                    canvas.push([o, c]);
+                }
+            });
+            this.ajustar?.(clone);
+            this.raiz = clone;
+            this.destino.replaceChildren(clone);
+            for (const [o, c] of canvas) {
+                try {
+                    c.getContext('2d').drawImage(o, 0, 0);
+                } catch {
+                    /* canvas sem conteúdo ainda */
+                }
+            }
+        }
+
+        /** Elemento do jogo que corresponde ao elemento clicado na cópia. */
+        correspondente(el) {
+            if (!this.alvo || !this.raiz) return null;
+            // Pokémon caído: identifica pelo slot (a lista muda de ordem o tempo todo)
+            const comSlot = el.closest('[data-slot]');
+            if (comSlot && this.raiz.contains(comSlot)) {
+                const original = this.alvo.querySelector(`[data-slot="${CSS.escape(comSlot.dataset.slot)}"]`);
+                if (!original) return null;
+                if (comSlot === el) return original;
+                return this.porCaminho(el, comSlot, original);
+            }
+            return this.porCaminho(el, this.raiz, this.alvo);
+        }
+
+        /** Refaz no original o caminho (índices dos filhos) do elemento na cópia; confere tag e title. */
+        porCaminho(el, raizCopia, raizOriginal) {
+            const caminho = [];
+            for (let n = el; n && n !== raizCopia; n = n.parentElement) caminho.unshift(Array.prototype.indexOf.call(n.parentElement.children, n));
+            let o = raizOriginal;
+            for (const i of caminho) o = o?.children[i];
+            if (o && o.tagName === el.tagName && (o.getAttribute('title') || '') === (el.getAttribute('title') || '')) return o;
+            // A estrutura mudou: procura pelo mesmo title entre os elementos da mesma tag
+            const titulo = el.getAttribute('title');
+            if (!titulo) return null;
+            return Array.from(raizOriginal.querySelectorAll(el.tagName)).find((x) => x.getAttribute('title') === titulo) || null;
+        }
+
+        repassarClique(e) {
+            const el = e.target.closest('button, label, input, select');
+            if (!el || !this.destino.contains(el) || el.matches('input[type="range"], select')) return;
+            // A cópia não muda sozinha: o jogo age no original e a cópia acompanha
+            e.preventDefault();
+            e.stopPropagation();
+            if (el.disabled) return;
+            const original = this.correspondente(el);
+            if (!original) return;
+            original.click();
+            this.agendar();
+        }
+
+        repassarValor(e, tipo) {
+            const el = e.target;
+            if (!el.matches?.('input[type="range"], select') || !this.destino.contains(el)) return;
+            e.stopPropagation();
+            const original = this.correspondente(el);
+            if (original) {
+                original.value = el.value;
+                original.dispatchEvent(new Event(tipo, { bubbles: true }));
+            }
+            // Entre o "input" e o "change" (barra arrastada ou setas do teclado) a cópia não é
+            // recriada: o "change" precisa chegar no mesmo elemento para o jogo salvar o valor
+            if (tipo === 'input') {
+                this.pausado = true;
+            } else {
+                this.pausado = false;
+                this.agendar();
+            }
+        }
+
+        encerrar() {
+            this.observador.disconnect();
+            this.destino.replaceChildren();
         }
     }
 
-    async function sincronizarOrdens() {
-        for (const tipo of Object.keys(TIPOS_ITEM)) await aplicarOrdem(tipo);
-    }
-
-    painel.addEventListener('change', (e) => {
-        const tipo = e.target.matches('select[data-tipo]') ? e.target.dataset.tipo : null;
-        if (!tipo) return;
-        salvarConfig();
-        comTrava(() => aplicarOrdem(tipo, true));
-    });
-
-    // ---- "Usar Revive" e "Voltar à hunt": espelho das opções do jogo ----
-    const ESPELHOS = [
-        { idBot: 'chk-usar-revive', seletorJogo: SEL.usarRevive },
-        { idBot: 'chk-voltar-hunt', seletorJogo: SEL.voltarHunt },
+    const espelhos = [
+        // "Proximidade para Capturar": lista de pokémon caídos e a bola escolhida
+        new Espelho({
+            origem: () => meuDoJogo('#caidos'),
+            destino: meu('espelho-caidos'),
+            ajustar: (clone) => clone.classList.remove('hidden', 'm-aberto'),
+        }),
+        // Painel "Auto" do jogo: bolas, revives, poções, barra de vida e opções
+        new Espelho({
+            origem: () => meuDoJogo('#auto-corpo'),
+            destino: meu('espelho-auto'),
+            ajustar: () => registrarAtivacoes(), // toda mudança no painel Auto passa por aqui
+        }),
     ];
 
-    function sincronizarCheckboxesDoJogo() {
-        for (const { idBot, seletorJogo } of ESPELHOS) {
-            const jogoChk = $(seletorJogo);
-            const botChk = meu(idBot);
-            botChk.disabled = !jogoChk;
-            if (jogoChk) botChk.checked = jogoChk.checked;
+    /** Elemento do jogo (fora do painel do bot). */
+    function meuDoJogo(seletor) {
+        return $$(seletor).find((el) => !el.closest(`#${ID_PAINEL}`)) || null;
+    }
+
+    /** Fundo de madeira do painel Auto do jogo, copiado para a moldura do espelho. */
+    function copiarFundoDoPainelAuto() {
+        const painelJogo = meuDoJogo('#p-auto');
+        if (!painelJogo) return;
+        const cs = getComputedStyle(painelJogo);
+        const moldura = meu('espelho-auto');
+        for (const prop of ['backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundRepeat', 'backgroundPosition', 'boxShadow', 'color']) {
+            moldura.style[prop] = cs[prop];
         }
     }
 
-    for (const { idBot, seletorJogo } of ESPELHOS) {
-        meu(idBot).addEventListener('change', (e) => {
-            const jogoChk = $(seletorJogo);
-            // click() dispara os eventos do próprio jogo (é ele quem salva a opção)
-            if (jogoChk && jogoChk.checked !== e.target.checked) jogoChk.click();
-            setTimeout(sincronizarCheckboxesDoJogo, 500);
+    // ---- Ordem de ativação dos chips (o jogo usa os itens nessa ordem) ----
+    const ativadoEm = new Map(); // "tipo|nome" → quando ficou ligado
+    let ordemInicial = 0;
+    let primeiraLeitura = true;
+
+    function registrarAtivacoes() {
+        let viuChip = false;
+        for (const tipo of Object.keys(TIPOS_ITEM)) {
+            for (const chip of chipsDoTipo(tipo)) {
+                viuChip = true;
+                const chave = `${tipo}|${chip.nome}`;
+                if (!chip.on) ativadoEm.delete(chave);
+                // Já ligado na 1ª leitura: ordem da tela. Ligado depois: hora da ativação.
+                else if (!ativadoEm.has(chave)) ativadoEm.set(chave, primeiraLeitura ? ordemInicial++ : Date.now());
+            }
+        }
+        if (viuChip) primeiraLeitura = false;
+    }
+
+    // Mudanças que não aparecem no DOM (checked/value de inputs) e garantia periódica
+    const aoMudarNoJogo = (e) => {
+        if (e.target.closest?.(`#${ID_PAINEL}`)) return;
+        espelhos.forEach((esp) => {
+            if (esp.alvo?.contains(e.target)) esp.agendar();
+        });
+    };
+    document.addEventListener('change', aoMudarNoJogo, true);
+    document.addEventListener('input', aoMudarNoJogo, true);
+    const timerEspelhos = setInterval(() => espelhos.forEach((esp) => esp.agendar()), 1000);
+
+    // Quando o painel Auto do jogo existir: primeira cópia e fundo
+    (async () => {
+        const pronto = await aguardar(() => encerrado || meuDoJogo('#auto-corpo'), Infinity, 1000);
+        if (encerrado || !pronto) return;
+        copiarFundoDoPainelAuto();
+        espelhos.forEach((esp) => esp.render());
+    })();
+
+    // =====================================================================
+    // Auto Captura: uma bola em cada pokémon caído
+    // =====================================================================
+    const ESPERA_ARREMESSO = 1000; // depois de cada arremesso
+    const ESPERA_LISTA = 100; // de quanto em quanto tempo olha a lista vazia
+    const PRAZO_CONFIRMACAO = 2000; // a bola saiu = o caído some da lista (visto em ~0,5 s)
+    const PAUSA_NOVA_TENTATIVA = 3000; // o jogo ignora cliques com outra bola no ar
+    const jaArremessados = new Map(); // slot → quando foi clicado (não clica de novo antes da pausa)
+    let cicloCaptura = null;
+
+    function atualizarBotaoCaptura() {
+        const botao = meu('btn-auto-captura');
+        botao.classList.toggle('on', cicloCaptura !== null);
+        botao.textContent = cicloCaptura !== null ? 'ON' : 'OFF';
+    }
+
+    function proximoCaido() {
+        const lista = meuDoJogo('#caidos-lista');
+        if (!lista) return null;
+        const agora = Date.now();
+        return $$(':scope > button.caido:not([disabled])', lista).find((b) => {
+            const quando = jaArremessados.get(b.dataset.slot || b);
+            return quando === undefined || agora - quando >= PAUSA_NOVA_TENTATIVA;
         });
     }
 
-    // Mudou no painel do jogo → atualiza o painel do bot
-    function aoMudarNoJogo(e) {
-        if (ESPELHOS.some(({ seletorJogo }) => e.target.matches?.(seletorJogo))) sincronizarCheckboxesDoJogo();
-    }
-    document.addEventListener('change', aoMudarNoJogo, true);
+    const caidoNaLista = (slot) => Boolean(meuDoJogo('#caidos-lista')?.querySelector(`:scope > [data-slot="${CSS.escape(slot)}"]`));
 
-    // Quando os chips do jogo aparecerem: gera as opções, espelha as caixas e aplica a ordem salva
-    (async () => {
-        const pronto = await aguardar(() => encerrado || $(`${TIPOS_ITEM.ball.opts} ${SEL.chipItem}`), Infinity, 1000);
-        if (encerrado || !pronto) return;
-        popularOpcoesItens();
-        sincronizarCheckboxesDoJogo();
-        comTrava(sincronizarOrdens);
-    })();
+    function ligarCaptura() {
+        const ciclo = {};
+        cicloCaptura = ciclo;
+        atualizarBotaoCaptura();
+        (async () => {
+            while (cicloCaptura === ciclo && !encerrado) {
+                // Esquece slots antigos (o jogo reaproveita números depois de um tempo)
+                const limite = Date.now() - 10 * 60 * 1000;
+                jaArremessados.forEach((quando, slot) => { if (quando < limite) jaArremessados.delete(slot); });
+
+                const alvo = jogo.sessaoPausada() ? null : proximoCaido();
+                if (!alvo) {
+                    await sleep(ESPERA_LISTA);
+                    continue;
+                }
+                const slot = alvo.dataset.slot;
+                const nome = alvo.querySelector('.caido-quem')?.textContent.trim();
+                jaArremessados.set(slot || alvo, Date.now());
+                try {
+                    alvo.click();
+                } catch (erro) {
+                    console.warn('[Bot Pokeidle] Auto Captura:', erro);
+                }
+                // Confirmação: o caído sai da lista quando a bola é lançada. Se continuar lá,
+                // o jogo ignorou o clique e ele recebe outra tentativa depois da pausa.
+                const lancou = slot ? await aguardar(() => !caidoNaLista(slot), PRAZO_CONFIRMACAO, 100) : true;
+                console.log(`[Bot Pokeidle] Auto Captura: ${lancou ? 'bola em' : 'clique ignorado pelo jogo, tenta de novo:'} ${nome} (slot ${slot})`);
+                await sleep(ESPERA_ARREMESSO);
+            }
+        })();
+    }
+
+    function desligarCaptura() {
+        cicloCaptura = null;
+        atualizarBotaoCaptura();
+    }
+
+    meu('btn-auto-captura').addEventListener('click', () => (cicloCaptura === null ? ligarCaptura() : desligarCaptura()));
+
 
     // =====================================================================
     // Auto Hunt
@@ -803,11 +1143,16 @@
     // Compras (Auto Potion / Auto Ball / Auto Revive)
     // =====================================================================
 
-    /** Item a repor: o 1º da ordem do painel; sem ordem, o 1º marcado no jogo. */
+    /**
+     * Item a repor: o 1º da ordem de uso do jogo, isto é, o item ligado há mais tempo.
+     * A ordem vem das ativações vistas pelo bot; os que já estavam ligados ao abrir
+     * a página contam antes, na ordem em que aparecem.
+     */
     function itemParaRepor(tipo) {
-        const [primeiro] = ordemEscolhida(tipo);
-        if (primeiro) return primeiro;
-        return chipsDoTipo(tipo).find((c) => c.on)?.nome || null;
+        registrarAtivacoes();
+        const ligados = chipsDoTipo(tipo).filter((c) => c.on && c.nome);
+        ligados.sort((a, b) => ativadoEm.get(`${tipo}|${a.nome}`) - ativadoEm.get(`${tipo}|${b.nome}`));
+        return ligados[0]?.nome || null;
     }
 
     /** Preço unitário do card ("1.500/un." → 1500). 0 se não encontrar. */
@@ -942,13 +1287,6 @@
         for (const [campo, idInput] of Object.entries(CAMPOS_CONFIG)) {
             if (Number.isFinite(config[campo])) meu(idInput).value = config[campo];
         }
-        if (config.ordem) {
-            ordemSalva = config.ordem;
-            if (opcoesProntas) {
-                popularOpcoesItens();
-                comTrava(sincronizarOrdens);
-            }
-        }
     }
 
     function salvarConfig() {
@@ -958,14 +1296,6 @@
             if (Number.isFinite(n)) config[campo] = n;
         }
         config.tipoFarm = meu('select-tipo-farm').value;
-        if (opcoesProntas) {
-            config.ordem = Object.fromEntries(
-                Object.keys(TIPOS_ITEM).map((tipo) => [tipo, [meu(`ordem-${tipo}-1`).value, meu(`ordem-${tipo}-2`).value]])
-            );
-            ordemSalva = config.ordem;
-        } else if (ordemSalva) {
-            config.ordem = ordemSalva;
-        }
         enviarParaExtensao({ acao: 'botSalvarConfig', config });
     }
 
@@ -990,10 +1320,17 @@
         encerrado = true;
         clearTimeout(timerSalvar);
         automacoes.forEach((a) => a.desligar());
+        desligarCaptura();
         relogio.encerrar();
+        clearInterval(timerEspelhos);
+        espelhos.forEach((esp) => esp.encerrar());
+        observadorTamanho.disconnect();
         window.removeEventListener('message', aoReceberMensagem);
+        window.removeEventListener('resize', aoRedimensionarJanela);
         document.removeEventListener('change', aoMudarNoJogo, true);
-        document.getElementById(ID_PAINEL)?.remove();
+        document.removeEventListener('input', aoMudarNoJogo, true);
+        janelaPip?.close();
+        painel.remove();
         document.getElementById(ID_ESTILO)?.remove();
         delete window.__pokeidleBotDestruir;
     }
