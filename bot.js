@@ -907,9 +907,9 @@
     // =====================================================================
     const ESPERA_ARREMESSO = 1000; // depois de cada arremesso
     const ESPERA_LISTA = 100; // de quanto em quanto tempo olha a lista vazia
-    const PRAZO_CONFIRMACAO = 2000; // a bola saiu = o caído some da lista (visto em ~0,5 s)
-    const PAUSA_NOVA_TENTATIVA = 3000; // o jogo ignora cliques com outra bola no ar
-    const jaArremessados = new Map(); // slot → quando foi clicado (não clica de novo antes da pausa)
+    // Cada caído recebe UM clique e nunca mais (mesma regra do script original). O registro é
+    // pelo slot e também no próprio botão: se o jogo redesenhar a lista, o slot continua marcado.
+    const jaArremessados = new Map(); // slot → quando recebeu a bola
     let cicloCaptura = null;
 
     function atualizarBotaoCaptura() {
@@ -921,14 +921,10 @@
     function proximoCaido() {
         const lista = meuDoJogo('#caidos-lista');
         if (!lista) return null;
-        const agora = Date.now();
-        return $$(':scope > button.caido:not([disabled])', lista).find((b) => {
-            const quando = jaArremessados.get(b.dataset.slot || b);
-            return quando === undefined || agora - quando >= PAUSA_NOVA_TENTATIVA;
-        });
+        return $$(':scope > button.caido:not([disabled]):not([data-auto-clicado])', lista).find(
+            (b) => !b.dataset.slot || !jaArremessados.has(b.dataset.slot)
+        );
     }
-
-    const caidoNaLista = (slot) => Boolean(meuDoJogo('#caidos-lista')?.querySelector(`:scope > [data-slot="${CSS.escape(slot)}"]`));
 
     function ligarCaptura() {
         const ciclo = {};
@@ -936,8 +932,8 @@
         atualizarBotaoCaptura();
         (async () => {
             while (cicloCaptura === ciclo && !encerrado) {
-                // Esquece slots antigos (o jogo reaproveita números depois de um tempo)
-                const limite = Date.now() - 10 * 60 * 1000;
+                // Esquece slots de mais de 30 min (o jogo pode reaproveitar números bem depois)
+                const limite = Date.now() - 30 * 60 * 1000;
                 jaArremessados.forEach((quando, slot) => { if (quando < limite) jaArremessados.delete(slot); });
 
                 const alvo = jogo.sessaoPausada() ? null : proximoCaido();
@@ -946,22 +942,19 @@
                     continue;
                 }
                 const slot = alvo.dataset.slot;
-                const nome = alvo.querySelector('.caido-quem')?.textContent.trim();
-                jaArremessados.set(slot || alvo, Date.now());
+                alvo.dataset.autoClicado = '1'; // nunca mais clica neste botão
+                if (slot) jaArremessados.set(slot, Date.now()); // nem neste slot, mesmo se o botão for recriado
                 try {
                     alvo.click();
+                    const nome = alvo.querySelector('.caido-quem')?.textContent.trim();
+                    console.log(`[Bot Pokeidle] Auto Captura: bola em ${nome} (slot ${slot})`);
                 } catch (erro) {
                     console.warn('[Bot Pokeidle] Auto Captura:', erro);
                 }
-                // Confirmação: o caído sai da lista quando a bola é lançada. Se continuar lá,
-                // o jogo ignorou o clique e ele recebe outra tentativa depois da pausa.
-                const lancou = slot ? await aguardar(() => !caidoNaLista(slot), PRAZO_CONFIRMACAO, 100) : true;
-                console.log(`[Bot Pokeidle] Auto Captura: ${lancou ? 'bola em' : 'clique ignorado pelo jogo, tenta de novo:'} ${nome} (slot ${slot})`);
                 await sleep(ESPERA_ARREMESSO);
             }
         })();
     }
-
     function desligarCaptura() {
         cicloCaptura = null;
         atualizarBotaoCaptura();

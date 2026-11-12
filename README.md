@@ -37,7 +37,7 @@
 
 ### 🎯 Auto Captura
 - Joga **1 bola em cada pokémon caído**, com a bola escolhida no jogo.
-- Confere cada arremesso: se o jogo ignorar o clique, tenta de novo.
+- **Nunca repete** no mesmo pokémon: cada um recebe um único clique.
 - A lista **Proximidade para Capturar** aparece dentro do painel do bot, igual à do jogo.
 
 <img src="docs/auto-captura.png" alt="Auto Captura" width="640">
