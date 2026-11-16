@@ -27,10 +27,38 @@ const Api = {
 
     enviarCodigo: (email, codigoIndicacao) =>
         Api.requisitar('enviar-codigo', { corpo: { email, codigo_indicacao: codigoIndicacao || undefined } }),
-    verificarCodigo: (email, codigo, codigoIndicacao) =>
-        Api.requisitar('verificar-codigo', { corpo: { email, codigo, codigo_indicacao: codigoIndicacao || undefined } }),
+    verificarCodigo: async (email, codigo, codigoIndicacao) =>
+        Api.requisitar('verificar-codigo', {
+            corpo: { email, codigo, codigo_indicacao: codigoIndicacao || undefined, id_navegador: await obterIdNavegador() },
+        }),
     sair: (email, token) => Api.requisitar('clever-worker', { corpo: { email, token, acao: 'sair' } }),
 };
+
+const FORMATO_ID_NAVEGADOR = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * ID aleatório deste navegador, usado só para o teste grátis valer uma vez por navegador.
+ * Não identifica a pessoa. Fica no chrome.storage.sync, que acompanha a conta Google do
+ * Chrome e sobrevive a reinstalar a extensão; a cópia no local cobre quem não sincroniza.
+ */
+async function obterIdNavegador() {
+    let id = null;
+    try {
+        id = (await chrome.storage.sync.get('idNavegador')).idNavegador;
+    } catch {
+        /* sincronização indisponível */
+    }
+    if (!FORMATO_ID_NAVEGADOR.test(id || '')) id = (await chrome.storage.local.get('idNavegador')).idNavegador;
+    if (!FORMATO_ID_NAVEGADOR.test(id || '')) id = crypto.randomUUID();
+
+    await chrome.storage.local.set({ idNavegador: id });
+    try {
+        await chrome.storage.sync.set({ idNavegador: id });
+    } catch {
+        /* sem sincronização: vale a cópia local */
+    }
+    return id;
+}
 
 /** Grava a sessão recebida de verificar-codigo. */
 async function salvarSessao({ email, token, ativo, vencimento, codigo_indicacao }) {
@@ -62,7 +90,7 @@ async function verificarLicenca(email, token) {
         return { ativo: false, vencimento: null, sessaoInvalida: true };
     }
 
-    const resposta = await Api.requisitar('clever-worker', { corpo: { email, token } });
+    const resposta = await Api.requisitar('clever-worker', { corpo: { email, token, id_navegador: await obterIdNavegador() } });
 
     if (resposta && resposta.codigo === 'SESSAO_INVALIDA') {
         await limparSessao();

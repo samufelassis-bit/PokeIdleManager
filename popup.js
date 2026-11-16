@@ -209,6 +209,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? '\nCódigo de indicação aplicado: na sua 1ª compra você e quem te indicou ganham +1 dia.'
                 : '';
             alert('E-mail confirmado! Seu teste grátis de 3 dias começou.' + extra);
+        } else if (data.teste_negado) {
+            alert(
+                'E-mail confirmado! Este navegador já usou o teste grátis em outra conta, então esta começa sem os 3 dias.\n' +
+                'Para usar o bot, clique em "Comprar / Renovar Licença".'
+            );
         }
     }
 
