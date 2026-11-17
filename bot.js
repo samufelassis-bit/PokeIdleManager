@@ -44,6 +44,18 @@
         ouro: '#tr-gold',
         usarRevive: '#auto-revive',
         voltarHunt: '#auto-voltar-hunt',
+
+        // Bosses
+        botaoBosses: 'button[data-modal="bosses"]',
+        listaBoss: '#boss-lista',
+        itemBoss: '#boss-lista button.boss-item',
+        fichaBoss: '#boss-ficha',
+        entradaBoss: '#boss-ficha .boss-entrada',
+        desafiarBoss: '#boss-ficha .boss-desafiar',
+        repetirBoss: '#boss-ficha .boss-auto input[type="checkbox"]',
+        vidaBoss: '#boss-vida', // barra de vida do boss: perde a classe "hidden" durante a luta
+        sairBoss: '#boss-sair', // "Abandonar arena"
+        nivelTreinador: '.tr-lv', // "Nv 736"
     };
 
     // Tipos de item das automações do jogo (chips) e onde comprá-los no market
@@ -228,6 +240,24 @@
         aguardarCentroLivre() {
             return aguardar(() => jogo.centroLivre(), 60000, 1000);
         },
+
+        estaNoCentro: () => Boolean($(SEL.hudHunt)?.textContent.includes('Centro Pokemon')),
+
+        /**
+         * Vai ao Centro Pokémon: espera o botão "ir ao centro" liberar (ele fica bloqueado com
+         * contagem durante o combate), clica e espera o HUD mostrar o Centro.
+         * Retorna true se terminou no Centro (ou já estava lá).
+         */
+        async irAoCentro() {
+            if (jogo.estaNoCentro()) return true;
+            if (!(await jogo.aguardarCentroLivre())) return false;
+            const botao = $(SEL.irCentro);
+            if (!botao) return false;
+            botao.click();
+            const chegou = await aguardar(() => jogo.estaNoCentro(), 8000, 250);
+            await sleep(500);
+            return Boolean(chegou);
+        },
     };
 
     // ---- Chips de itens (bola / poção / revive) ----
@@ -253,7 +283,7 @@
         #${ID_PAINEL} .bp-topo-botoes { display: flex; gap: 4px; }
         #${ID_PAINEL} .bp-min { background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; width: 20px; height: 20px; cursor: pointer; font-size: 10px; padding: 0; display: flex; align-items: center; justify-content: center; }
         #${ID_PAINEL} .bp-conteudo { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
-        #${ID_PAINEL}.bp-pip { position: static !important; width: 100% !important; height: 100vh !important; max-height: none; border-radius: 0; border: 0; resize: none; }
+        #${ID_PAINEL}.bp-pip { position: static !important; width: 100% !important; height: 100vh !important; max-height: none !important; min-height: 0 !important; border-radius: 0; border: 0; resize: none; }
         #${ID_PAINEL}.bp-pip .bp-topo { cursor: default; }
         #${ID_PAINEL} .bp-espelho .caidos { position: static; width: auto; }
         #${ID_PAINEL} .bp-espelho .caidos-lista:empty::after { content: 'Nenhum pokémon caído por perto'; display: block; padding: 6px 2px; font-size: 10.5px; color: var(--sobre-mad-dim, #aaa); }
@@ -344,6 +374,19 @@
                 titulo: 'Auto Revive',
                 idBotao: 'btn-auto-revive',
                 campos: campoNumero('input-min-revive', 'Mín Revive:', 100) + campoNumero('input-tempo-revive', 'Tempo (s):', 300),
+            })}
+            ${secaoAuto({
+                titulo: 'Auto Boss',
+                idBotao: 'btn-auto-boss',
+                campos: `
+                    <span class="bp-rotulo">Boss:</span>
+                    <div class="bp-linha">
+                        <select id="select-boss"><option value="">(abra a lista)</option></select>
+                        <button class="bp-lupa" id="btn-carregar-bosses" title="Carregar os bosses do jogo">🔍</button>
+                    </div>
+                    ${campoNumero('input-min-boss', 'Mín tokens:', 1)}
+                    ${campoNumero('input-tempo-boss', 'Tempo (s):', 300)}
+                    <label class="bp-check"><input type="checkbox" id="chk-boss-repetir" checked> Repetir até acabar os tokens</label>`,
             })}
             <div class="bp-secao">
                 <div class="bp-linha"><span class="bp-titulo">Auto Captura</span><button class="bp-toggle" id="btn-auto-captura">OFF</button></div>
@@ -962,6 +1005,282 @@
 
     meu('btn-auto-captura').addEventListener('click', () => (cicloCaptura === null ? ligarCaptura() : desligarCaptura()));
 
+    // =====================================================================
+    // Auto Boss: desafia o boss escolhido quando houver tokens suficientes
+    // =====================================================================
+    // Fim de cada luta no jogo:
+    //  1) ainda com a barra de vida, abre o sorteio do Fragmento de Z-Move (#recompensa, sem
+    //     .rc-com-resumo). Enquanto ele estiver aberto, o jogo não segue;
+    //  2) fechado o sorteio, vem o "Boss derrotado!" (#boss-loot);
+    //  3) com "Repetir automaticamente", quando a repetição acaba, vem o "Resumo dos bosses"
+    //     (#recompensa.rc-com-resumo).
+    // A sessão de boss acaba no "Boss derrotado!" (sem repetir) ou no resumo (com repetir).
+    // Sem relatório (derrota, abandono...), acaba sozinha 3 min depois da última luta.
+    const FOLGA_SEM_RELATORIO_MS = 3 * 60 * 1000;
+    const ESPERA_FECHAR_RELATORIO_MS = 2000;
+    let ultimaVezEmBoss = 0;
+    let aguardandoRelatorio = false;
+    let bossSalvo = ''; // escolha salva; pode chegar antes da lista de bosses existir
+
+    jogo.lutandoBoss = () => {
+        const vida = $(SEL.vidaBoss);
+        const emLuta = Boolean(vida && !vida.classList.contains('hidden')) || Boolean($(SEL.sairBoss)?.offsetParent);
+        if (emLuta) {
+            ultimaVezEmBoss = Date.now();
+            aguardandoRelatorio = true;
+        }
+        return emLuta;
+    };
+    jogo.sessaoDeBoss = () => {
+        if (jogo.lutandoBoss()) return true;
+        if (aguardandoRelatorio && Date.now() - ultimaVezEmBoss >= FOLGA_SEM_RELATORIO_MS) aguardandoRelatorio = false;
+        return aguardandoRelatorio;
+    };
+
+    const textoDe = (el) => el?.textContent.replace(/\s+/g, ' ').trim() || '';
+
+    // Os popups são fixos (sem offsetParent): o que vale é a classe / aria-hidden
+    /** Popup aberto do fim de luta: 'sorteio' (Z-Move), 'resumo' (fim da repetição),
+     *  'luta' ("Boss derrotado!") — ou null. O #recompensa também serve a outras recompensas
+     *  do jogo: o sorteio só conta enquanto há sessão de boss. */
+    function popupDeBoss() {
+        const rec = $('#recompensa');
+        if (rec && rec.getAttribute('aria-hidden') === 'false') {
+            if (rec.classList.contains('rc-com-resumo')) return { tipo: 'resumo', el: rec, ok: () => $('#rc-ok') };
+            if (aguardandoRelatorio || jogo.lutandoBoss()) return { tipo: 'sorteio', el: rec, ok: () => $('#rc-ok') };
+        }
+        const loot = $('#boss-loot');
+        if (loot && !loot.classList.contains('hidden')) return { tipo: 'luta', el: loot, ok: () => $('#boss-loot-ok') };
+        return null;
+    }
+
+    function registrarPopup({ tipo, el }) {
+        let texto;
+        if (tipo === 'luta') {
+            const stats = $$('.boss-loot-stat', el).map((s) => `${textoDe(s.querySelector('small'))} ${textoDe(s.querySelector('b'))}`);
+            texto = `${textoDe(el.querySelector('#boss-loot-titulo'))} ${stats.join(' · ')} | ${textoDe(el.querySelector('#boss-loot-drops'))}`;
+        } else if (tipo === 'resumo') {
+            const itens = $$('.rc-resumo-linha:not(.zero)', el).map((l) => `${textoDe(l.querySelector('span'))} ${textoDe(l.querySelector('b'))}`);
+            texto = `${textoDe(el.querySelector('#rc-lead'))} ${itens.join(', ') || 'nenhum item'}`;
+        } else {
+            texto = textoDe(el.querySelector('#rc-nome')) || 'sorteio do Z-Move';
+        }
+        console.log(`[Bot Pokeidle] Auto Boss: ${texto}`);
+    }
+
+    /** O "Repetir automaticamente" do jogo está marcado (a ficha fica no DOM mesmo fechada). */
+    const jogoRepetindo = () => Boolean($(SEL.repetirBoss)?.checked);
+    const autoBossLigado = () => automacoes.some((a) => a.botao.id === 'btn-auto-boss' && a.ligada);
+
+    // Vigia os popups do fim da luta: registra cada um, encerra a sessão no relatório final e,
+    // com o Auto Boss ligado, fecha os popups (o jogo só segue depois que o jogador fecha).
+    let tratandoPopup = false;
+    let ultimoPopup = null; // o mesmo popup aberto não é registrado duas vezes
+    const timerRelatorio = setInterval(async () => {
+        if (encerrado || tratandoPopup) return;
+        const popup = popupDeBoss();
+        const chave = popup && `${popup.tipo}|${textoDe(popup.el).slice(0, 120)}`;
+        if (!popup || chave === ultimoPopup) {
+            if (!popup) ultimoPopup = null;
+            return;
+        }
+        tratandoPopup = true;
+        try {
+            ultimoPopup = chave;
+            registrarPopup(popup);
+            const encerra = popup.tipo === 'resumo' || (popup.tipo === 'luta' && !jogoRepetindo());
+            if (encerra) aguardandoRelatorio = false;
+            if (!autoBossLigado()) return; // sem o Auto Boss, o jogador fecha quando quiser
+            await sleep(ESPERA_FECHAR_RELATORIO_MS);
+            if (popupDeBoss()?.el === popup.el) {
+                popup.ok()?.click();
+                ultimoPopup = null; // o próximo popup igual (outra luta da repetição) também é tratado
+            }
+        } finally {
+            tratandoPopup = false;
+        }
+    }, 1000);
+
+    // Marca a hora sempre que a barra de vida do boss muda (luta começando ou acabando)
+    const observadorBoss = new MutationObserver(() => jogo.lutandoBoss());
+    (async () => {
+        const vida = await aguardar(() => encerrado || $(SEL.vidaBoss), Infinity, 2000);
+        if (!encerrado && vida) observadorBoss.observe(vida, { attributes: true, attributeFilter: ['class'] });
+    })();
+
+    const nivelDoTreinador = () => numero($(SEL.nivelTreinador)?.textContent);
+
+    /** Abre a tela de Bosses se estiver fechada. Retorna true se FOI ESTE CÓDIGO quem abriu. */
+    async function abrirBosses() {
+        if ($(SEL.listaBoss)?.offsetParent) return false;
+        const botao = $(SEL.botaoBosses);
+        if (!botao) return false;
+        botao.click();
+        await aguardar(() => $(SEL.listaBoss)?.offsetParent, 4000);
+        await sleep(300);
+        return true;
+    }
+
+    /** Bosses da lista do jogo, com a região e o nível mínimo (a raid semanal fica de fora). */
+    function lerBossesDaLista() {
+        const bosses = [];
+        let regiao = '';
+        let nivel = 0;
+        for (const el of $(SEL.listaBoss)?.children || []) {
+            if (el.matches('.boss-lista-reg')) {
+                regiao = el.querySelector('b')?.textContent.trim() || '';
+                nivel = numero(el.querySelector('i')?.textContent);
+            } else if (el.matches('button.boss-item') && el.dataset.key && !el.dataset.key.startsWith('@')) {
+                bosses.push({ chave: el.dataset.key, nome: el.querySelector('.boss-item-nome')?.textContent.trim() || el.dataset.key, regiao, nivel });
+            }
+        }
+        return bosses;
+    }
+
+    function preencherSelectBoss(bosses) {
+        const select = meu('select-boss');
+        const escolhido = select.value || bossSalvo;
+        const meuNivel = nivelDoTreinador();
+        select.replaceChildren(new Option('(escolha um boss)', ''));
+        const grupos = new Map();
+        for (const b of bosses) {
+            if (!grupos.has(b.regiao)) {
+                const grupo = document.createElement('optgroup');
+                grupo.label = `${b.regiao} · Nv ${b.nivel.toLocaleString('pt-BR')}`;
+                grupos.set(b.regiao, grupo);
+                select.appendChild(grupo);
+            }
+            const bloqueado = meuNivel > 0 && b.nivel > meuNivel;
+            const opcao = new Option(bloqueado ? `${b.nome} (precisa nv ${b.nivel.toLocaleString('pt-BR')})` : b.nome, b.chave);
+            opcao.disabled = bloqueado;
+            grupos.get(b.regiao).appendChild(opcao);
+        }
+        if (bosses.some((b) => b.chave === escolhido)) select.value = escolhido;
+    }
+
+    async function carregarBosses() {
+        const abriu = await abrirBosses();
+        const bosses = lerBossesDaLista();
+        if (bosses.length) preencherSelectBoss(bosses);
+        if (abriu) await jogo.fecharModal();
+        return bosses.length;
+    }
+
+    meu('btn-carregar-bosses').addEventListener('click', async () => {
+        const qtd = await comTrava(carregarBosses);
+        if (!qtd) avisar('Não encontrei a lista de bosses. Abra o jogo e tente de novo.');
+    });
+
+    // Carga automática da lista depois do F5. O botão "Boss" aparece antes de o jogo terminar
+    // de carregar a conta (aí a tela abre vazia), e o jogo pode abrir um aviso no login: espera
+    // o nível do treinador aparecer e tenta algumas vezes, como na carga das regiões do /hunt.
+    (async () => {
+        const pronto = await aguardar(
+            () => encerrado || ($(SEL.botaoBosses) && nivelDoTreinador() > 0),
+            Infinity,
+            1000
+        );
+        if (encerrado || !pronto) return;
+        await sleep(2000);
+
+        // Até ~1 min (cobre um aviso do jogo aberto no login)
+        for (let tentativa = 0; tentativa < 20 && !encerrado; tentativa++) {
+            const qtd = await comTrava(() =>
+                jogo.sessaoPausada() || jogo.modalAberto() || jogo.sessaoDeBoss() ? 0 : carregarBosses()
+            );
+            if (qtd > 0 || meu('select-boss').options.length > 1) break;
+            await sleep(3000);
+        }
+    })();
+
+    /** Seleciona o boss na tela de Bosses e devolve a ficha dele (tokens, botão, repetir). */
+    async function abrirFichaDoBoss(chave) {
+        const item = $(`${SEL.itemBoss}[data-key="${CSS.escape(chave)}"]`);
+        if (!item) return null;
+        item.click();
+        const ok = await aguardar(() => $(SEL.fichaBoss)?.dataset.boss === chave && $(SEL.desafiarBoss), 3000);
+        if (!ok) return null;
+        await sleep(300);
+        return {
+            tokens: numero($(SEL.entradaBoss)?.querySelector('em')?.textContent), // "você tem 3"
+            custo: $(SEL.entradaBoss)?.querySelector('b')?.textContent.trim() || '',
+            botao: $(SEL.desafiarBoss),
+            repetir: $(SEL.repetirBoss),
+        };
+    }
+
+    /** Abre a tela de Bosses, lê a ficha do boss e fecha a tela se foi este código quem abriu. */
+    async function consultarBoss(chave) {
+        const abriu = await abrirBosses();
+        try {
+            if (!$(SEL.listaBoss)?.offsetParent) return null;
+            const ficha = await abrirFichaDoBoss(chave);
+            return ficha && { tokens: ficha.tokens, custo: ficha.custo };
+        } finally {
+            if (abriu && jogo.modalAberto()) await jogo.fecharModal();
+        }
+    }
+
+    async function executarAutoBoss() {
+        if (jogo.sessaoDeBoss()) return; // já está lutando (ou entre uma luta e outra)
+        const chave = meu('select-boss').value;
+        if (!chave) return;
+        const minimo = lerInt('input-min-boss', 1, 1);
+
+        // 1) Já juntou os tokens?
+        const consulta = await consultarBoss(chave);
+        if (!consulta) {
+            console.warn('[Bot Pokeidle] Auto Boss: boss não encontrado na lista do jogo:', chave);
+            return;
+        }
+        if (consulta.tokens < minimo) return; // ainda não juntou o mínimo
+
+        // 2) Para entrar no boss é preciso estar no Centro: espera o botão "ir ao centro"
+        //    liberar (fica bloqueado durante o combate), vai ao Centro e só então desafia
+        if (!(await jogo.irAoCentro())) {
+            console.warn('[Bot Pokeidle] Auto Boss: não consegui ir ao Centro; tento no próximo ciclo.');
+            return;
+        }
+
+        // 3) Desafia
+        const abriu = await abrirBosses();
+        if (!$(SEL.listaBoss)?.offsetParent) return;
+        try {
+            const ficha = await abrirFichaDoBoss(chave);
+            if (!ficha || ficha.tokens < minimo) return;
+            if (ficha.botao.disabled) {
+                console.warn(`[Bot Pokeidle] Auto Boss: o jogo não liberou a luta ("${ficha.botao.textContent.trim()}").`);
+                return;
+            }
+
+            // "Repetir automaticamente" do próprio jogo: luta de novo enquanto houver entrada
+            // Marcar o repetir já inicia a luta no jogo: aí não clica em desafiar (seria um 2º clique)
+            const repetir = meu('chk-boss-repetir').checked;
+            let jaComecou = false;
+            if (ficha.repetir && ficha.repetir.checked !== repetir) {
+                ficha.repetir.click();
+                jaComecou = repetir && Boolean(await aguardar(() => jogo.lutandoBoss(), 4000, 200));
+                if (!jaComecou) await sleep(300);
+            }
+
+            if (!jaComecou && !jogo.lutandoBoss()) {
+                if (!ficha.botao.isConnected || ficha.botao.disabled) {
+                    console.warn('[Bot Pokeidle] Auto Boss: o botão de desafiar sumiu ou travou depois de marcar o repetir.');
+                    return;
+                }
+                ficha.botao.click();
+            }
+            const comecou = await aguardar(() => jogo.lutandoBoss(), 15000, 250);
+            console.log(
+                comecou
+                    ? `[Bot Pokeidle] Auto Boss: luta iniciada (${chave}, ${ficha.tokens} token(s), ${repetir ? 'repetindo' : '1 luta'}).`
+                    : `[Bot Pokeidle] Auto Boss: cliquei em desafiar, mas a luta não começou em 15 s (${chave}).`
+            );
+        } finally {
+            if (abriu && jogo.modalAberto()) await jogo.fecharModal();
+        }
+    }
+
 
     // =====================================================================
     // Auto Hunt
@@ -1072,6 +1391,9 @@
     }
 
     async function executarAutoHunt() {
+        // Luta de boss em andamento (ou entre uma luta e outra): não troca de hunt
+        if (jogo.sessaoDeBoss()) return;
+
         // 1) Antes de tudo: compara o melhor Pokémon do /hunt com a hunt atual
         const abriuPainel = await jogo.abrirPainelHunt();
         const fecharSeAbri = () => { if (abriuPainel) jogo.fecharPainelHunt(); };
@@ -1116,19 +1438,8 @@
         if (meu('chk-sync-risco').checked) await sincronizarRiscoComPocao();
         fecharSeAbri();
 
-        // 2) Hunt diferente: confere o botão "ir ao centro" e aguarda ficar disponível
-        //    (se já estiver no Centro Pokémon, não precisa esperar)
-        const jaNoCentro = hudAtual.textContent.includes('Centro Pokemon');
-        if (!jaNoCentro && !(await jogo.aguardarCentroLivre())) return;
-
-        // 3) Trâmite para ir à melhor hunt
-        const botaoCentro = $(SEL.irCentro);
-        if (botaoCentro && !jaNoCentro) {
-            botaoCentro.click();
-            await aguardar(() => $(SEL.hudHunt)?.textContent.includes('Centro Pokemon'), 8000, 250);
-            await sleep(500);
-        }
-
+        // 2) Hunt diferente: vai ao Centro (espera o botão liberar) e de lá para a melhor hunt
+        if (!(await jogo.irAoCentro())) return;
         await selecionarNoMapa(melhor, regiaoAlvo);
     }
 
@@ -1252,6 +1563,7 @@
         new Automacao({ idBotao: 'btn-auto-potion', idTempo: 'input-tempo-potion', tempoPadrao: 300, executar: () => reporItem('potion') }),
         new Automacao({ idBotao: 'btn-auto-ball', idTempo: 'input-tempo-ball', tempoPadrao: 300, executar: () => reporItem('ball') }),
         new Automacao({ idBotao: 'btn-auto-revive', idTempo: 'input-tempo-revive', tempoPadrao: 300, executar: () => reporItem('revive') }),
+        new Automacao({ idBotao: 'btn-auto-boss', idTempo: 'input-tempo-boss', tempoPadrao: 300, executar: executarAutoBoss }),
     ];
 
     // =====================================================================
@@ -1265,6 +1577,8 @@
         minPotion: 'input-min-potion',
         minBall: 'input-min-ball',
         minRevive: 'input-min-revive',
+        tempoBoss: 'input-tempo-boss',
+        minBoss: 'input-min-boss',
     };
     let timerSalvar = null;
 
@@ -1280,6 +1594,13 @@
         for (const [campo, idInput] of Object.entries(CAMPOS_CONFIG)) {
             if (Number.isFinite(config[campo])) meu(idInput).value = config[campo];
         }
+        if (typeof config.bossRepetir === 'boolean') meu('chk-boss-repetir').checked = config.bossRepetir;
+        if (typeof config.boss === 'string') {
+            bossSalvo = config.boss;
+            const select = meu('select-boss');
+            // A lista pode ainda não ter carregado: aí o preencherSelectBoss usa o bossSalvo
+            if (Array.from(select.options).some((o) => o.value === bossSalvo)) select.value = bossSalvo;
+        }
     }
 
     function salvarConfig() {
@@ -1289,6 +1610,8 @@
             if (Number.isFinite(n)) config[campo] = n;
         }
         config.tipoFarm = meu('select-tipo-farm').value;
+        config.boss = meu('select-boss').value || bossSalvo;
+        config.bossRepetir = meu('chk-boss-repetir').checked;
         enviarParaExtensao({ acao: 'botSalvarConfig', config });
     }
 
@@ -1301,7 +1624,8 @@
 
     // ...e na hora ao sair do campo / apertar Enter (evita perder o valor se der F5 logo em seguida)
     painel.addEventListener('change', (e) => {
-        if (!e.target.matches('input[type=number], #select-tipo-farm')) return;
+        if (!e.target.matches('input[type=number], #select-tipo-farm, #select-boss, #chk-boss-repetir')) return;
+        if (e.target.id === 'select-boss') bossSalvo = e.target.value;
         clearTimeout(timerSalvar);
         salvarConfig();
     });
@@ -1316,8 +1640,10 @@
         desligarCaptura();
         relogio.encerrar();
         clearInterval(timerEspelhos);
+        clearInterval(timerRelatorio);
         espelhos.forEach((esp) => esp.encerrar());
         observadorTamanho.disconnect();
+        observadorBoss.disconnect();
         window.removeEventListener('message', aoReceberMensagem);
         window.removeEventListener('resize', aoRedimensionarJanela);
         document.removeEventListener('change', aoMudarNoJogo, true);

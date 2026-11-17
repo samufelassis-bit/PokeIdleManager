@@ -4,7 +4,7 @@
 
 # Pokeidle Bot Manager
 
-**Automação para o PokeIdle: Auto Hunt, Auto Captura, compra automática de poções, bolas e revives e painel em janela flutuante.**
+**Automação para o PokeIdle: Auto Hunt, Auto Boss, Auto Captura, compra de poções, bolas e revives e painel em janela flutuante.**
 
 [![Instalar no Chrome](https://img.shields.io/badge/Chrome-Instalar%20extens%C3%A3o-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/pfbcacchejpkpnmfdmcfohlpnnhjkndg)
 [![Usar no Edge](https://img.shields.io/badge/Edge-Usar%20no%20navegador-0078D7?style=for-the-badge&logo=microsoftedge&logoColor=white)](https://chromewebstore.google.com/detail/pfbcacchejpkpnmfdmcfohlpnnhjkndg)
@@ -30,6 +30,14 @@
 - Ajusta a barra de uso das poções pelo risco da hunt: arredonda o risco para cima e usa a poção abaixo de *100% − risco*. De 50% de risco para cima, mantém a vida sempre cheia.
 
 <img src="docs/auto-hunt.png" alt="Auto Hunt" width="640">
+
+### 👑 Auto Boss
+- Escolha o boss numa lista com os bosses do jogo, **por região e nível** (os que pedem nível maior que o seu aparecem bloqueados).
+- Defina o **mínimo de Boss Tokens**: quando você juntar essa quantidade, o bot vai ao Centro Pokémon e entra na luta.
+- **Repetir até acabar os tokens:** usa o "Repetir automaticamente" do jogo e luta até gastar todos.
+- Fecha os relatórios do fim da luta (sorteio do Z-Move, "Boss derrotado!" e o resumo da repetição), anota o resultado no console e libera o Auto Hunt para voltar à caça.
+
+<img src="docs/auto-boss.png" alt="Auto Boss" width="640">
 
 ### 🧪 Compra automática de itens
 - **Auto Potion**, **Auto Ball** e **Auto Revive** mantêm o estoque acima do mínimo que você definir.
@@ -76,7 +84,7 @@ O Auto Hunt usa o ranking de hunts da extensão gratuita **/hunt for PokeIdle**:
 
 [![Adicionar o /hunt for PokeIdle](https://img.shields.io/badge/%2Fhunt%20for%20PokeIdle-Adicionar%20ao%20navegador-16a34a?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/mhnplloljgchpfpcpbhmcokmnefodjnh)
 
-Se ela não estiver instalada, o popup da extensão e o painel do bot mostram um aviso com um botão para instalar. As compras automáticas e a ordem dos itens funcionam sem ela.
+Se ela não estiver instalada, o popup da extensão e o painel do bot mostram um aviso com um botão para instalar. O Auto Boss, a Auto Captura, as compras automáticas e o painel de itens funcionam sem ela.
 
 ---
 
