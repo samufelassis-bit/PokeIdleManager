@@ -4,7 +4,7 @@
 
 # Pokeidle Bot Manager
 
-**Automação para o PokeIdle: Auto Hunt, Auto Boss, Auto Captura, compra de poções, bolas e revives e painel em janela flutuante.**
+**Automação para o PokeIdle: Auto Hunt, Auto Boss, Auto Captura, preço dos pokémon, compra de itens e painel em janela flutuante.**
 
 [![Instalar no Chrome](https://img.shields.io/badge/Chrome-Instalar%20extens%C3%A3o-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/pfbcacchejpkpnmfdmcfohlpnnhjkndg)
 [![Usar no Edge](https://img.shields.io/badge/Edge-Usar%20no%20navegador-0078D7?style=for-the-badge&logo=microsoftedge&logoColor=white)](https://chromewebstore.google.com/detail/pfbcacchejpkpnmfdmcfohlpnnhjkndg)
@@ -38,6 +38,14 @@
 - Fecha os relatórios do fim da luta (sorteio do Z-Move, "Boss derrotado!" e o resumo da repetição), anota o resultado no console e libera o Auto Hunt para voltar à caça.
 
 <img src="docs/auto-boss.png" alt="Auto Boss" width="640">
+
+### 💰 Precificar
+- Um botão **💰 Precificar** na ficha de qualquer pokémon, seu ou de outro jogador.
+- Mostra na própria ficha o preço em Gemas: **Vender rápido**, **Preço justo** e **Esperar**, com a confiança do resultado.
+- Usa as **vendas do mercado dos últimos 30 dias** e conta **Z-Move, AoE e Mega** no preço.
+- O link "Ver detalhes" abre a mesma ficha no [Precificador de Pokémon](https://briaoale.github.io/precificador-pokemon/), com os gráficos completos.
+
+<img src="docs/precificar.png" alt="Precificar" width="640">
 
 ### 🧪 Compra automática de itens
 - **Auto Potion**, **Auto Ball** e **Auto Revive** mantêm o estoque acima do mínimo que você definir.
@@ -84,7 +92,7 @@ O Auto Hunt usa o ranking de hunts da extensão gratuita **/hunt for PokeIdle**:
 
 [![Adicionar o /hunt for PokeIdle](https://img.shields.io/badge/%2Fhunt%20for%20PokeIdle-Adicionar%20ao%20navegador-16a34a?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/mhnplloljgchpfpcpbhmcokmnefodjnh)
 
-Se ela não estiver instalada, o popup da extensão e o painel do bot mostram um aviso com um botão para instalar. O Auto Boss, a Auto Captura, as compras automáticas e o painel de itens funcionam sem ela.
+Se ela não estiver instalada, o popup da extensão e o painel do bot mostram um aviso com um botão para instalar. O Auto Boss, a Auto Captura, o Precificar, as compras automáticas e o painel de itens funcionam sem ela.
 
 ---
 
@@ -115,7 +123,10 @@ Depois de instalar:
 | Pagamentos | Mercado Pago |
 
 ## 🔒 Privacidade
-O que o bot lê do jogo fica no seu navegador. O servidor guarda apenas o e-mail, a licença, as compras e as indicações. A política de privacidade completa está na página da extensão na Chrome Web Store.
+O que o bot lê do jogo fica no seu navegador. O servidor guarda apenas o e-mail, a licença, as compras e as indicações. O Precificar baixa o arquivo público de vendas do site do Precificador de Pokémon e calcula no seu navegador, sem enviar nenhum dado seu. A política de privacidade completa está na página da extensão na Chrome Web Store.
+
+## 🙏 Créditos
+O cálculo do **Precificar** é o do [Precificador de Pokémon](https://github.com/briaoAle/precificador-pokemon), de briaoAle, sob a licença MIT (cópia em [`precificador/LICENSE-precificador.txt`](precificador/LICENSE-precificador.txt)). As vendas do mercado vêm do site dele.
 
 ---
 
