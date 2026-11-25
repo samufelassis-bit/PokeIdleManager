@@ -73,6 +73,29 @@ async function precosDoPrecificador() {
     }
 }
 
+// ---------------------------------------------------------------- Aviso de licença no jogo
+// O botão "Assinar" do aviso (content.js) pede aqui: o e-mail vem do storage, nunca da página.
+const PAGINA_DO_JOGO = /^https:\/\/([a-z0-9-]+\.)?pokeidle\.io\//;
+
+chrome.runtime.onMessage.addListener((msg, remetente, responder) => {
+    if (msg?.acao !== 'abrirPagamento') return false;
+    if (!remetente.tab || !PAGINA_DO_JOGO.test(remetente.url || '')) return false;
+    (async () => {
+        try {
+            const { emailUsuario } = await chrome.storage.local.get('emailUsuario');
+            if (!emailUsuario) return responder({ ok: false, mensagem: 'Entre com o seu e-mail no ícone da extensão.' });
+            const data = await Api.criarPagamento(emailUsuario);
+            const url = typeof data.checkout_url === 'string' && data.checkout_url.startsWith('https://') ? data.checkout_url : null;
+            if (!data.sucesso || !url) return responder({ ok: false, mensagem: data.mensagem || 'Não consegui gerar o pagamento. Tente de novo.' });
+            await chrome.tabs.create({ url, index: remetente.tab.index + 1 });
+            responder({ ok: true });
+        } catch {
+            responder({ ok: false, mensagem: 'Erro de conexão. Tente de novo em instantes.' });
+        }
+    })();
+    return true; // resposta assíncrona
+});
+
 chrome.runtime.onMessage.addListener((msg, _remetente, responder) => {
     if (msg?.tipo !== 'precificador:precos') return false;
     precosDoPrecificador()
