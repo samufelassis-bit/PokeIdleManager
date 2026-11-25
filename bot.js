@@ -1047,7 +1047,6 @@
         const corpo = corposNoChao.shift();
         const ballId = bolaEscolhida();
         conexaoJogo.send(JSON.stringify({ t: 'ball.throw', ballId, slot: corpo.slot }));
-        console.log(`[Bot Pokeidle] Auto Captura: bola ${ballId} em ${corpo.nome} (slot ${corpo.slot})`);
         return true;
     }
 
@@ -1120,20 +1119,6 @@
         return null;
     }
 
-    function registrarPopup({ tipo, el }) {
-        let texto;
-        if (tipo === 'luta') {
-            const stats = $$('.boss-loot-stat', el).map((s) => `${textoDe(s.querySelector('small'))} ${textoDe(s.querySelector('b'))}`);
-            texto = `${textoDe(el.querySelector('#boss-loot-titulo'))} ${stats.join(' · ')} | ${textoDe(el.querySelector('#boss-loot-drops'))}`;
-        } else if (tipo === 'resumo') {
-            const itens = $$('.rc-resumo-linha:not(.zero)', el).map((l) => `${textoDe(l.querySelector('span'))} ${textoDe(l.querySelector('b'))}`);
-            texto = `${textoDe(el.querySelector('#rc-lead'))} ${itens.join(', ') || 'nenhum item'}`;
-        } else {
-            texto = textoDe(el.querySelector('#rc-nome')) || 'sorteio do Z-Move';
-        }
-        console.log(`[Bot Pokeidle] Auto Boss: ${texto}`);
-    }
-
     /** O "Repetir automaticamente" do jogo está marcado (a ficha fica no DOM mesmo fechada). */
     const jogoRepetindo = () => Boolean($(SEL.repetirBoss)?.checked);
     const autoBossLigado = () => automacoes.some((a) => a.botao.id === 'btn-auto-boss' && a.ligada);
@@ -1153,7 +1138,6 @@
         tratandoPopup = true;
         try {
             ultimoPopup = chave;
-            registrarPopup(popup);
             const encerra = popup.tipo === 'resumo' || (popup.tipo === 'luta' && !jogoRepetindo());
             if (encerra) aguardandoRelatorio = false;
             if (!autoBossLigado()) return; // sem o Auto Boss, o jogador fecha quando quiser
@@ -1337,11 +1321,7 @@
                 ficha.botao.click();
             }
             const comecou = await aguardar(() => jogo.lutandoBoss(), 15000, 250);
-            console.log(
-                comecou
-                    ? `[Bot Pokeidle] Auto Boss: luta iniciada (${chave}, ${ficha.tokens} token(s), ${repetir ? 'repetindo' : '1 luta'}).`
-                    : `[Bot Pokeidle] Auto Boss: cliquei em desafiar, mas a luta não começou em 15 s (${chave}).`
-            );
+            if (!comecou) console.warn(`[Bot Pokeidle] Auto Boss: cliquei em desafiar, mas a luta não começou em 15 s (${chave}).`);
         } finally {
             if (abriu && jogo.modalAberto()) await jogo.fecharModal();
         }
@@ -1590,7 +1570,6 @@
             const enviadoEm = Date.now();
             conexaoJogo.send(JSON.stringify({ t: 'shop.buy', kind: produto.kind, id: produto.id, qty: quantidade }));
             if (await aguardar(() => qtdAtual() > atual, 4000, 150)) {
-                console.log(`[Bot Pokeidle] Comprou ${quantidade}x ${nome} (sem abrir o market)`);
                 tentativa = null;
                 continue;
             }

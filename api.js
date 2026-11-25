@@ -75,7 +75,7 @@ async function salvarSessao({ email, token, ativo, vencimento, codigo_indicacao 
 /** Apaga a sessão local (o bot para na hora, via storage.onChanged no content.js). */
 async function limparSessao() {
     await chrome.storage.local.set({ ativo: false, vencimento: null });
-    await chrome.storage.local.remove(['tokenSessao', 'codigoIndicacao', 'indicacoesRecompensadas']);
+    await chrome.storage.local.remove(['tokenSessao', 'codigoIndicacao', 'indicacoesRecompensadas', 'oferta']);
 }
 
 /**
@@ -103,7 +103,16 @@ async function verificarLicenca(email, token) {
     const salvo = await chrome.storage.local.get('codigoIndicacao');
     const codigoIndicacao = (resposta && resposta.codigo_indicacao) || salvo.codigoIndicacao || null;
     const indicacoesRecompensadas = Number((resposta && resposta.indicacoes_recompensadas) || 0);
+    const oferta = lerOferta(resposta && resposta.oferta);
 
-    await chrome.storage.local.set({ ativo, vencimento, codigoIndicacao, indicacoesRecompensadas });
-    return { ativo, vencimento, codigoIndicacao, indicacoesRecompensadas, sessaoInvalida: false };
+    await chrome.storage.local.set({ ativo, vencimento, codigoIndicacao, indicacoesRecompensadas, oferta });
+    return { ativo, vencimento, codigoIndicacao, indicacoesRecompensadas, oferta, sessaoInvalida: false };
+}
+
+/** Oferta vinda do servidor ({ preco, ate }) validada, ou null. */
+function lerOferta(valor) {
+    const preco = Number(valor && valor.preco);
+    const ate = valor && new Date(valor.ate);
+    if (!(preco > 0) || !ate || Number.isNaN(ate.getTime()) || ate <= new Date()) return null;
+    return { preco, ate: ate.toISOString() };
 }

@@ -53,9 +53,22 @@ document.addEventListener('DOMContentLoaded', () => {
             : 'Validade: --/--/----';
     }
 
-    function renderizarLicenca({ ativo, vencimento, codigoIndicacao, indicacoesRecompensadas }) {
+    function mostrarOferta(oferta) {
+        const ate = oferta && new Date(oferta.ate);
+        const valida = Boolean(oferta && Number(oferta.preco) > 0 && ate && ate > new Date());
+        $('oferta').hidden = !valida;
+        btnComprar.textContent = valida
+            ? `Assinar por ${Number(oferta.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+            : 'Comprar / Renovar Licença';
+        if (!valida) return;
+        $('lbl-oferta-preco').textContent = Number(oferta.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        $('lbl-oferta-ate').textContent = ate.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderizarLicenca({ ativo, vencimento, codigoIndicacao, indicacoesRecompensadas, oferta }) {
         mostrarStatus(ativo ? 'Status: Ativo' : 'Status: Vencido / Inativo', ativo ? 'ok' : 'erro');
         mostrarVencimento(vencimento);
+        mostrarOferta(oferta);
         if (codigoIndicacao) $('lbl-indicacao').textContent = codigoIndicacao;
 
         const lblIndicacoes = $('lbl-indicacoes');
@@ -312,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function iniciar() {
         const dados = await chrome.storage.local.get([
             'emailUsuario', 'tokenSessao', 'verificacaoPendente',
-            'ativo', 'vencimento', 'codigoIndicacao', 'indicacoesRecompensadas',
+            'ativo', 'vencimento', 'codigoIndicacao', 'indicacoesRecompensadas', 'oferta',
         ]);
 
         if (dados.emailUsuario && dados.tokenSessao) {

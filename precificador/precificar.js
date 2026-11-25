@@ -225,7 +225,6 @@
       const d = await carregar();
       const r = precificar(d, f);
       mostrar(c, f, r, d);
-      console.log('[Bot Pokeidle] Precificar:', f, r);
     } catch (e) {
       console.warn('[Bot Pokeidle] Precificar:', e);
       mostrarErro(c, e.message);
