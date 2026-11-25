@@ -7,3 +7,9 @@ supabase/
 Zips/
 client_secret.json
 loja/
+
+# Arquivos de sistema e ferramentas locais
+.claude/
+desktop.ini
+Thumbs.db
+*.log

@@ -274,6 +274,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     $('btn-instalar-hunt').addEventListener('click', () => chrome.tabs.create({ url: URL_EXTENSAO_HUNT }));
 
+    // Chat de suporte (Brevo Conversations), numa aba nova
+    const URL_SUPORTE = 'https://conversations-widget.brevo.com/?hostId=6af49ba7e1e3f887f70cbfeb';
+    $('btn-suporte').addEventListener('click', () => chrome.tabs.create({ url: URL_SUPORTE }));
+
     chrome.storage.local.get('huntInstalado', ({ huntInstalado }) => mostrarAvisoHunt(huntInstalado));
     chrome.storage.onChanged.addListener((mudancas, area) => {
         if (area === 'local' && mudancas.huntInstalado) mostrarAvisoHunt(mudancas.huntInstalado.newValue);

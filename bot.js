@@ -28,6 +28,7 @@
         hudHunt: '#hud-hunt',
         irCentro: '#ir-centro',
         botaoMapa: 'button[data-modal="mapa"]',
+        modoListaMapa: '#mapa-modo .mapa-modo-bt[data-modo="lista"]', // chave Mapa/Lista do mapa
         regiaoMapa: '.mapa-reg-bt',
         nomeRegiaoMapa: '.mapa-reg-nome',
         buscaMapa: '#f-mapa',
@@ -330,6 +331,7 @@
         <div class="bp-topo" id="painel-topo" title="Arraste para mover · canto inferior direito redimensiona">
             <span>Auto Bot Manager</span>
             <span class="bp-topo-botoes">
+                <button class="bp-min" id="btn-suporte" title="Falar com o suporte (abre o chat numa aba nova)">💬</button>
                 <button class="bp-min" id="btn-pip" title="Abrir em janela flutuante (PiP)">⧉</button>
                 <button class="bp-min" id="btn-minimizar" title="Minimizar">−</button>
             </span>
@@ -534,6 +536,12 @@
         aplicarLayout(lerLayout());
         espelhos.forEach((e) => e.render());
     }
+
+    // Chat de suporte (Brevo Conversations): abre a página do chat numa aba nova,
+    // sem carregar nenhum script de fora na extensão nem na página do jogo.
+    meu('btn-suporte').addEventListener('click', () => {
+        window.open('https://conversations-widget.brevo.com/?hostId=6af49ba7e1e3f887f70cbfeb', '_blank', 'noopener');
+    });
 
     meu('btn-pip').addEventListener('click', async () => {
         if (janelaPip) {
@@ -948,12 +956,20 @@
     // =====================================================================
     // Auto Captura: uma bola em cada pokémon caído
     // =====================================================================
-    const ESPERA_ARREMESSO = 1000; // depois de cada arremesso
-    const ESPERA_LISTA = 100; // de quanto em quanto tempo olha a lista vazia
-    // Cada caído recebe UM clique e nunca mais (mesma regra do script original). O registro é
-    // pelo slot e também no próprio botão: se o jogo redesenhar a lista, o slot continua marcado.
-    const jaArremessados = new Map(); // slot → quando recebeu a bola
+    // O servidor manda o evento "morte" de cada selvagem derrotado, com o slot do corpo, com ou sem
+    // o Modo Economia. O bot escuta a conexão do jogo e manda a mesma mensagem que o botão da lista
+    // "Proximidade para Capturar" manda ({ t: 'ball.throw', ballId, slot }). Assim:
+    //  - funciona no Modo Economia, em que o jogo não monta a lista (a cena fica desligada);
+    //  - cada morte vira UM arremesso, e o slot reaproveitado pelo próximo pokémon não atrapalha.
+    const ESPERA_ARREMESSO = 1000; // entre um arremesso e outro
+    const ESPERA_FILA = 100; // de quanto em quanto tempo olha a fila vazia
+    const VIDA_CORPO_MS = 28000; // o corpo fica 30 s no chão (TEMPO_CHAO_MS do jogo); margem de 2 s
+    const BOLA_POR_ARQUIVO = { 'ball-poke': 1, 'ball-great': 2, 'ball-super': 3, 'ball-ultra': 4, 'ball-beast': 5 };
+    const corposNoChao = []; // { slot, nome, ate }, um por evento "morte"
     let cicloCaptura = null;
+    let conexaoJogo = null;
+    let bolaLembrada = 1;
+    let ultimoErroDoJogo = null; // { quando, texto }: mensagem "erro" do servidor, para explicar compra recusada
 
     function atualizarBotaoCaptura() {
         const botao = meu('btn-auto-captura');
@@ -961,12 +977,78 @@
         botao.textContent = cicloCaptura !== null ? 'ON' : 'OFF';
     }
 
-    function proximoCaido() {
-        const lista = meuDoJogo('#caidos-lista');
-        if (!lista) return null;
-        return $$(':scope > button.caido:not([disabled]):not([data-auto-clicado])', lista).find(
-            (b) => !b.dataset.slot || !jaArremessados.has(b.dataset.slot)
-        );
+    /** ID da bola pelo ícone (o jogo desenha cada bola com o arquivo ball-poke.png, ball-great.png...). */
+    function idDaBola(el) {
+        const fonte = el?.querySelector('img')?.getAttribute('src')
+            || el?.querySelector('[style*="background"]')?.style.backgroundImage || '';
+        return BOLA_POR_ARQUIVO[(fonte.match(/(ball-[a-z]+)\.png/) || [])[1]] || null;
+    }
+
+    /**
+     * Bola que o bot joga:
+     *  1) a das automações do jogo (painel Auto): a 1ª bola ligada, na ordem em que foram ligadas, que
+     *     ainda tem estoque (o jogo usa os itens nessa ordem, e a compra automática repõe essa bola);
+     *  2) sem nenhuma ligada, a marcada na lista "Proximidade para Capturar";
+     *  3) sem as duas na página, a última que deu para ler (ou a Poké Ball).
+     */
+    function bolaEscolhida() {
+        const ordem = (c) => ativadoEm.get(`ball|${c.nome}`) ?? Infinity;
+        const ligada = chipsDoTipo('ball')
+            .filter((c) => c.on && c.qtd > 0 && !c.el.closest(`#${ID_PAINEL}`))
+            .sort((a, b) => ordem(a) - ordem(b))
+            .map((c) => idDaBola(c.el))
+            .find(Boolean);
+        const daLista = idDaBola(meuDoJogo('#caidos-bolas .caidos-bola.on'));
+        bolaLembrada = ligada || daLista || bolaLembrada;
+        return bolaLembrada;
+    }
+
+    function aoMensagemDoJogo(ev) {
+        if (typeof ev.data !== 'string') return;
+        const ehErro = ev.data.includes('"t":"erro"');
+        if (!ehErro && !(cicloCaptura && ev.data.includes('"morte"'))) return; // o resto não interessa: nem abre o JSON
+        let m;
+        try { m = JSON.parse(ev.data); } catch { return; }
+        if (m.t === 'erro') {
+            ultimoErroDoJogo = { quando: Date.now(), texto: String(m.msg || m.chave || '').slice(0, 140) };
+            return;
+        }
+        if (m.t !== 'batalha' || !Array.isArray(m.ev)) return;
+        for (const e of m.ev) {
+            if (e.k !== 'morte' || e.quem !== 'selvagem' || e.safari || e.slot == null) continue;
+            corposNoChao.push({ slot: e.slot, nome: e.nome, ate: Date.now() + VIDA_CORPO_MS });
+        }
+    }
+
+    // A conexão do jogo fica numa variável interna dele: o bot pega a instância no próximo envio
+    // (o jogo manda "ping" a cada poucos segundos) e troca sozinho quando o jogo reconecta.
+    const enviarOriginal = WebSocket.prototype.send;
+    const enviarDoBot = function (dados) {
+        if (this !== conexaoJogo && typeof this.url === 'string' && this.url.includes(location.host)) {
+            conexaoJogo?.removeEventListener('message', aoMensagemDoJogo);
+            conexaoJogo = this;
+            conexaoJogo.addEventListener('message', aoMensagemDoJogo);
+        }
+        return enviarOriginal.call(this, dados);
+    };
+    WebSocket.prototype.send = enviarDoBot;
+    function soltarConexaoJogo() {
+        // Só desfaz se ninguém (outra extensão) embrulhou o send depois do bot
+        if (WebSocket.prototype.send === enviarDoBot) WebSocket.prototype.send = enviarOriginal;
+        conexaoJogo?.removeEventListener('message', aoMensagemDoJogo);
+        conexaoJogo = null;
+    }
+
+    /** Joga uma bola no próximo corpo da fila. Devolve true se jogou. */
+    function arremessar() {
+        const agora = Date.now();
+        while (corposNoChao.length && corposNoChao[0].ate < agora) corposNoChao.shift(); // corpo já sumiu
+        if (!corposNoChao.length || conexaoJogo?.readyState !== WebSocket.OPEN) return false;
+        const corpo = corposNoChao.shift();
+        const ballId = bolaEscolhida();
+        conexaoJogo.send(JSON.stringify({ t: 'ball.throw', ballId, slot: corpo.slot }));
+        console.log(`[Bot Pokeidle] Auto Captura: bola ${ballId} em ${corpo.nome} (slot ${corpo.slot})`);
+        return true;
     }
 
     function ligarCaptura() {
@@ -975,31 +1057,15 @@
         atualizarBotaoCaptura();
         (async () => {
             while (cicloCaptura === ciclo && !encerrado) {
-                // Esquece slots de mais de 30 min (o jogo pode reaproveitar números bem depois)
-                const limite = Date.now() - 30 * 60 * 1000;
-                jaArremessados.forEach((quando, slot) => { if (quando < limite) jaArremessados.delete(slot); });
-
-                const alvo = jogo.sessaoPausada() ? null : proximoCaido();
-                if (!alvo) {
-                    await sleep(ESPERA_LISTA);
-                    continue;
-                }
-                const slot = alvo.dataset.slot;
-                alvo.dataset.autoClicado = '1'; // nunca mais clica neste botão
-                if (slot) jaArremessados.set(slot, Date.now()); // nem neste slot, mesmo se o botão for recriado
-                try {
-                    alvo.click();
-                    const nome = alvo.querySelector('.caido-quem')?.textContent.trim();
-                    console.log(`[Bot Pokeidle] Auto Captura: bola em ${nome} (slot ${slot})`);
-                } catch (erro) {
-                    console.warn('[Bot Pokeidle] Auto Captura:', erro);
-                }
-                await sleep(ESPERA_ARREMESSO);
+                bolaEscolhida(); // mantém a bola lembrada em dia enquanto a lista do jogo aparece
+                const jogou = !jogo.sessaoPausada() && arremessar();
+                await sleep(jogou ? ESPERA_ARREMESSO : ESPERA_FILA);
             }
         })();
     }
     function desligarCaptura() {
         cicloCaptura = null;
+        corposNoChao.length = 0;
         atualizarBotaoCaptura();
     }
 
@@ -1361,6 +1427,15 @@
         if (!botaoMapa) return;
 
         botaoMapa.click();
+        await aguardar(() => $(SEL.regiaoMapa) || $(SEL.modoListaMapa), 3000);
+
+        // O mapa abre no último modo usado. A busca e as linhas das hunts só existem no modo Lista.
+        const lista = $(SEL.modoListaMapa);
+        if (lista && !lista.classList.contains('on')) {
+            lista.click();
+            await aguardar(() => $(SEL.modoListaMapa)?.classList.contains('on'), 2000);
+            await sleep(300);
+        }
         await aguardar(() => $(SEL.regiaoMapa), 3000);
 
         const regiaoMin = regiao.toLowerCase();
@@ -1454,9 +1529,80 @@
      */
     function itemParaRepor(tipo) {
         registrarAtivacoes();
-        const ligados = chipsDoTipo(tipo).filter((c) => c.on && c.nome);
+        const ligados = chipsDoTipo(tipo).filter((c) => c.on && c.nome && !c.el.closest(`#${ID_PAINEL}`));
         ligados.sort((a, b) => ativadoEm.get(`${tipo}|${a.nome}`) - ativadoEm.get(`${tipo}|${b.nome}`));
-        return ligados[0]?.nome || null;
+        return ligados[0] || null;
+    }
+
+    // ---- Compra pela conexão do jogo, sem abrir o market ----
+    // O botão "Comprar" do market manda { t: 'shop.buy', kind: 'item' | 'ball', id, qty }. O bot manda
+    // a mesma mensagem e confere pela quantidade no chip do painel Auto. Se não der (sem conexão ou
+    // item desconhecido), cai no jeito antigo, pela tela do market.
+    let catalogoItens = null; // nome do arquivo do ícone → { id, preco }, de /assets/items.json do jogo
+
+    async function carregarCatalogoItens() {
+        if (catalogoItens) return catalogoItens;
+        const resposta = await fetch('/assets/items.json', { cache: 'force-cache' });
+        const { items = [] } = await resposta.json();
+        catalogoItens = new Map(items.map((i) => [String(i.icon || '').split('/').pop(), { id: i.id, preco: i.npcPrice || 0 }]));
+        return catalogoItens;
+    }
+
+    /** { kind, id, preco } do item do chip, pelo ícone. null se não reconhecer. */
+    async function produtoDoChip(tipo, chip) {
+        if (tipo === 'ball') {
+            const id = idDaBola(chip.el);
+            return id ? { kind: 'ball', id, preco: 0 } : null; // preço das bolas não está no items.json
+        }
+        const img = chip.el.querySelector('img');
+        const fonte = img?.getAttribute('src') || chip.el.querySelector('[style*="background"]')?.style.backgroundImage || '';
+        const arquivo = (fonte.match(/([a-z0-9_-]+\.(?:png|gif))/i) || [])[1];
+        if (!arquivo) return null;
+        try {
+            const item = (await carregarCatalogoItens()).get(arquivo);
+            return item ? { kind: 'item', ...item } : null;
+        } catch (erro) {
+            console.warn('[Bot Pokeidle] Não consegui ler a lista de itens do jogo:', erro);
+            return null;
+        }
+    }
+
+    /** Compra pela conexão. Devolve true se conseguiu comprar o que precisava (ou o que o ouro permitiu). */
+    async function comprarPelaConexao(tipo, chip, produto, minimo) {
+        const nome = chip.nome;
+        const qtdAtual = () => chipsDoTipo(tipo).find((c) => c.nome === nome && !c.el.closest(`#${ID_PAINEL}`))?.qtd ?? 0;
+        let tentativa = null; // quantidade a tentar; cai pela metade quando o servidor recusa
+
+        for (let rodada = 0; rodada < 30; rodada++) {
+            if (jogo.sessaoPausada() || conexaoJogo?.readyState !== WebSocket.OPEN) return false;
+            const atual = qtdAtual();
+            const faltante = minimo - atual;
+            if (faltante <= 0) return true;
+
+            const ouro = numero($(SEL.ouro)?.textContent);
+            const podePagar = produto.preco > 0 && ouro > 0 ? Math.floor(ouro / produto.preco) : Infinity;
+            const quantidade = Math.min(faltante, MAX_POR_COMPRA, podePagar, tentativa ?? Infinity);
+            if (quantidade <= 0) {
+                console.warn('[Bot Pokeidle] Ouro insuficiente para comprar', nome);
+                return true; // nada a fazer: não adianta abrir o market
+            }
+
+            const enviadoEm = Date.now();
+            conexaoJogo.send(JSON.stringify({ t: 'shop.buy', kind: produto.kind, id: produto.id, qty: quantidade }));
+            if (await aguardar(() => qtdAtual() > atual, 4000, 150)) {
+                console.log(`[Bot Pokeidle] Comprou ${quantidade}x ${nome} (sem abrir o market)`);
+                tentativa = null;
+                continue;
+            }
+            const erro = ultimoErroDoJogo && ultimoErroDoJogo.quando >= enviadoEm ? ultimoErroDoJogo.texto : '';
+            if (quantidade === 1) {
+                console.warn(`[Bot Pokeidle] Compra recusada: ${nome}.` + (erro ? ` Mensagem do jogo: "${erro}"` : ''));
+                return true; // nem 1 unidade: provavelmente sem ouro; não insiste
+            }
+            tentativa = Math.floor(quantidade / 2); // talvez o ouro não dê para tudo: tenta metade
+            console.warn(`[Bot Pokeidle] Compra de ${quantidade}x ${nome} não confirmada; tentando ${tentativa}.` + (erro ? ` Mensagem do jogo: "${erro}"` : ''));
+        }
+        return true;
     }
 
     /** Preço unitário do card ("1.500/un." → 1500). 0 se não encontrar. */
@@ -1500,12 +1646,17 @@
 
     async function reporItem(tipo) {
         const cfg = TIPOS_ITEM[tipo];
-        const nome = itemParaRepor(tipo);
-        if (!nome) return;
+        const chip = itemParaRepor(tipo);
+        if (!chip) return;
+        const nome = chip.nome;
 
         const minimo = lerInt(cfg.idMin, cfg.minPadrao, 0);
         const qtdAtual = () => chipPorNome(tipo, nome)?.qtd ?? 0;
         if (qtdAtual() >= minimo) return;
+
+        // 1º pela conexão do jogo (sem abrir tela); se não der, pelo market como antes
+        const produto = conexaoJogo?.readyState === WebSocket.OPEN ? await produtoDoChip(tipo, chip) : null;
+        if (produto && (await comprarPelaConexao(tipo, chip, produto, minimo))) return;
 
         if (!(await abrirCategoriaMarket(cfg.categoria))) return jogo.fecharModal();
 
@@ -1638,6 +1789,7 @@
         clearTimeout(timerSalvar);
         automacoes.forEach((a) => a.desligar());
         desligarCaptura();
+        soltarConexaoJogo();
         relogio.encerrar();
         clearInterval(timerEspelhos);
         clearInterval(timerRelatorio);
